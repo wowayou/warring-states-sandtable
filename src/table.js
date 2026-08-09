@@ -7,7 +7,7 @@ import {
 import { OUTLINE, REGIONS, RIVERS, MOUNTAINS, WALLS, PASSES } from './atlas.js';
 import { STATES, BATTLES, ownerAt, capitalsAt } from './history.js';
 
-const SERIF = '"Songti SC","STSong","Source Han Serif SC","Noto Serif CJK SC","Noto Serif SC",serif';
+const SERIF = '"Sandtable Serif","Songti SC","STSong","Source Han Serif SC","Noto Serif CJK SC","Noto Serif SC",serif';
 const SANS = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif';
 
 const PALETTE = {
@@ -26,6 +26,7 @@ const COAST_FROM = 7;   // 鸭绿江口
 const COAST_TO = 36;    // 北部湾
 const GRID = 300;       // 高程场分辨率
 const SAMPLE = 260;     // 陆地采样分辨率
+const KM_PER_UNIT = 1.112; // 一个盘面单位约当的公里数（一度纬距 = 100 单位）
 
 export class SandTable {
   constructor(canvas) {
@@ -395,6 +396,11 @@ export class SandTable {
     if (this.layers.battles) this.drawBattles(ctx, now);
     if (this.playback) this.drawPlayback(ctx, now);
 
+    this.drawPlate(ctx);
+    this.drawCompass(ctx);
+    this.drawScale(ctx);
+    if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
+
     ctx.globalAlpha = 0.55;
     ctx.fillStyle = ctx.createPattern(this.grain, 'repeat');
     ctx.fillRect(0, 0, this.css.w, this.css.h);
@@ -567,7 +573,7 @@ export class SandTable {
       ctx.stroke();
     }
     if (this.view.scale > 1.1) {
-      ctx.font = `600 11px ${SERIF}`;
+      ctx.font = `700 11px ${SERIF}`;
       ctx.fillStyle = 'rgba(150,200,212,0.9)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -842,6 +848,175 @@ export class SandTable {
     ctx.strokeStyle = 'rgba(232,226,210,0.8)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
+    ctx.restore();
+  }
+
+  // 盘缘：刻度、角标、方位、比例、图例——沙盘的框本身也是读图的工具
+  drawPlate(ctx) {
+    const m = 9;
+    const w = this.css.w;
+    const h = this.css.h;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(201,162,39,0.2)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(m + 0.5, m + 0.5, w - m * 2 - 1, h - m * 2 - 1);
+
+    ctx.strokeStyle = 'rgba(201,162,39,0.16)';
+    for (let x = m; x < w - m; x += 40) {
+      const major = Math.round((x - m) / 40) % 5 === 0;
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, m + 1);
+      ctx.lineTo(x + 0.5, m + (major ? 8 : 4));
+      ctx.moveTo(x + 0.5, h - m - 1);
+      ctx.lineTo(x + 0.5, h - m - (major ? 8 : 4));
+      ctx.stroke();
+    }
+    for (let y = m; y < h - m; y += 40) {
+      const major = Math.round((y - m) / 40) % 5 === 0;
+      ctx.beginPath();
+      ctx.moveTo(m + 1, y + 0.5);
+      ctx.lineTo(m + (major ? 8 : 4), y + 0.5);
+      ctx.moveTo(w - m - 1, y + 0.5);
+      ctx.lineTo(w - m - (major ? 8 : 4), y + 0.5);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(201,162,39,0.6)';
+    ctx.lineWidth = 1.6;
+    const L = 16;
+    for (const [cx, cy, dx, dy] of [[m, m, 1, 1], [w - m, m, -1, 1], [m, h - m, 1, -1], [w - m, h - m, -1, -1]]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + dx * L, cy);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx, cy + dy * L);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawCompass(ctx) {
+    const x = this.css.w - 34;
+    const y = 44;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(201,162,39,0.65)';
+    ctx.fillStyle = 'rgba(201,162,39,0.85)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x, y + 13);
+    ctx.lineTo(x, y - 6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y - 12);
+    ctx.lineTo(x - 4, y - 3);
+    ctx.lineTo(x + 4, y - 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = `700 12px ${SERIF}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('北', x, y + 16);
+    ctx.restore();
+  }
+
+  drawScale(ctx) {
+    const pxPerKm = (this.base * this.view.scale) / KM_PER_UNIT;
+    const steps = [50, 100, 200, 300, 500, 1000, 2000];
+    let km = steps[steps.length - 1];
+    for (const c of steps) { if (c * pxPerKm >= 70 && c * pxPerKm <= 170) { km = c; break; } }
+    const len = km * pxPerKm;
+    const x = 22;
+    const y = this.css.h - 44;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(201,162,39,0.8)';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 4);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + len, y);
+    ctx.lineTo(x + len, y - 4);
+    ctx.moveTo(x + len / 2, y);
+    ctx.lineTo(x + len / 2, y - 3);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(232,226,210,0.62)';
+    ctx.font = `500 10.5px ${SANS}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${km} 公里 · 约 ${Math.round(km / 0.4158 / 10) * 10} 秦里`, x, y + 4);
+    ctx.restore();
+  }
+
+  drawLegend(ctx) {
+    const rows = ['都城·兵棋', '关塞', '长城', '战事', '化外之地'];
+    const x = 24;
+    const y = 26;
+    const w = 106;
+    const h = 20 + rows.length * 17;
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,11,12,0.74)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(201,162,39,0.24)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.fillStyle = 'rgba(201,162,39,0.75)';
+    ctx.font = `700 10px ${SERIF}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('圖 例', x + 9, y + 11);
+
+    ctx.font = `500 10.5px ${SANS}`;
+    const gx = x + 9;
+    rows.forEach((label, i) => {
+      const cy = y + 28 + i * 17;
+      ctx.save();
+      if (i === 0) {
+        ctx.fillStyle = '#8e5aa0';
+        ctx.fillRect(gx, cy - 6, 6, 10);
+        ctx.strokeStyle = 'rgba(232,226,210,0.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(gx + 0.5, cy - 5.5, 5, 9);
+      } else if (i === 1) {
+        ctx.strokeStyle = 'rgba(201,162,39,0.9)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(gx, cy + 3);
+        ctx.lineTo(gx, cy - 1);
+        ctx.lineTo(gx + 3.5, cy - 4);
+        ctx.lineTo(gx + 7, cy - 1);
+        ctx.lineTo(gx + 7, cy + 3);
+        ctx.stroke();
+      } else if (i === 2) {
+        ctx.strokeStyle = '#c6bb98';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(gx - 1, cy);
+        ctx.lineTo(gx + 9, cy);
+        ctx.stroke();
+      } else if (i === 3) {
+        ctx.strokeStyle = PALETTE.cinnabar;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(gx, cy - 4);
+        ctx.lineTo(gx + 8, cy + 4);
+        ctx.moveTo(gx + 8, cy - 4);
+        ctx.lineTo(gx, cy + 4);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#2c3029';
+        ctx.fillRect(gx, cy - 5, 9, 10);
+        ctx.strokeStyle = 'rgba(232,226,210,0.3)';
+        ctx.lineWidth = 1;
+        for (let k = -8; k < 10; k += 4) {
+          ctx.beginPath();
+          ctx.moveTo(gx + k, cy + 5);
+          ctx.lineTo(gx + k + 10, cy - 5);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+      ctx.fillStyle = 'rgba(232,226,210,0.6)';
+      ctx.fillText(label, gx + 16, cy);
+    });
     ctx.restore();
   }
 

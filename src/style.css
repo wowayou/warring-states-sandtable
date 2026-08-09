@@ -1,5 +1,14 @@
 /* 青铜沙盘：色出于铜锈、朱砂、简牍；朱砂只予战事 */
 
+/* 显示字体随页内嵌，不听凭各机器的回退 */
+@font-face {
+  font-family: "Sandtable Serif";
+  src: url("../assets/display.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --void: #080b0c;
   --patina: #12181a;
@@ -13,8 +22,8 @@
   --bone-2: rgba(232, 226, 210, 0.62);
   --bone-3: rgba(232, 226, 210, 0.34);
 
-  --display: "Songti SC", "STSong", "Source Han Serif SC", "Noto Serif CJK SC",
-    "Noto Serif SC", "SimSun", serif;
+  --display: "Sandtable Serif", "Songti SC", "STSong", "Source Han Serif SC",
+    "Noto Serif CJK SC", "Noto Serif SC", "SimSun", serif;
   --body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Noto Sans CJK SC", system-ui, sans-serif;
   --num: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
@@ -63,8 +72,15 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   gap: 28px;
   padding: 0 20px;
   border-bottom: 1px solid var(--patina-edge);
-  box-shadow: 0 1px 0 rgba(201, 162, 39, 0.16);
-  background: linear-gradient(180deg, #161d1c, #0e1414);
+  box-shadow: 0 1px 0 rgba(201, 162, 39, 0.16), inset 0 1px 0 rgba(232, 226, 210, 0.07);
+  background: linear-gradient(180deg, #171e1d, #0d1313), var(--cast);
+}
+
+/* 铸面：细密的横纹与斑驳，令 UI 读作一块金属而非一层色块 */
+:root {
+  --cast:
+    repeating-linear-gradient(0deg, rgba(232, 226, 210, 0.017) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 5px);
 }
 
 .rail-title { display: flex; align-items: baseline; gap: 12px; }
@@ -97,12 +113,13 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .rail-act-no {
   display: grid;
   place-items: center;
-  width: 19px;
-  height: 19px;
-  font-size: 11px;
+  width: 20px;
+  height: 20px;
+  font-size: 11.5px;
   letter-spacing: 0;
-  color: var(--bronze);
-  border: 1px solid rgba(201, 162, 39, 0.55);
+  color: #0d1211;
+  background: var(--bronze);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
 .rail-year {
@@ -135,6 +152,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .chip {
   padding: 4px 10px;
+  box-shadow: inset 0 1px 0 rgba(232, 226, 210, 0.06);
   font-size: 11.5px;
   letter-spacing: 0.1em;
   color: var(--bone-3);
@@ -163,7 +181,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  background: linear-gradient(180deg, #101616, #0a0f10);
+  background: linear-gradient(180deg, #111818, #090e0f), var(--cast);
+  box-shadow: inset 0 1px 0 rgba(232, 226, 210, 0.05);
 }
 
 .panel-left { border-right: 1px solid var(--patina-edge); grid-template-rows: auto minmax(0, 1fr); }
@@ -175,6 +194,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   gap: 10px;
   padding: 10px 14px 8px;
   border-bottom: 1px solid var(--patina-edge);
+  box-shadow: inset 3px 0 0 rgba(201, 162, 39, 0.5);
 }
 
 .panel-head span {
@@ -253,24 +273,30 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   gap: 6px;
 }
 
+/* 类目做成小印：朱文阳刻，字为底色所刻去 */
 .evt-kind {
   flex: none;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   display: grid;
   place-items: center;
-  font-size: 9.5px;
+  font-size: 10px;
   font-family: var(--display);
-  border: 1px solid currentColor;
-  color: var(--bone-3);
+  font-weight: 700;
   line-height: 1;
+  color: #0a1010;
+  background: var(--seal, #6b7268);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.5);
+  opacity: 0.92;
 }
 
-.evt[data-kind="战"] .evt-kind { color: var(--cinnabar); }
-.evt[data-kind="变"] .evt-kind { color: #7e9a45; }
-.evt[data-kind="纵"] .evt-kind { color: #3d8ea3; }
-.evt[data-kind="并"] .evt-kind { color: var(--bronze); }
-.evt[data-kind="都"] .evt-kind { color: #8e5aa0; }
+.evt[data-kind="战"] { --seal: #c8352b; }
+.evt[data-kind="变"] { --seal: #8fae4e; }
+.evt[data-kind="纵"] { --seal: #4a9db4; }
+.evt[data-kind="并"] { --seal: #c9a227; }
+.evt[data-kind="都"] { --seal: #9b66ad; }
+.evt[data-kind="学"] { --seal: #b98cc4; }
+.evt[data-kind="工"] { --seal: #a8845c; }
 
 .evt-text {
   display: none;
@@ -297,7 +323,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .power { padding: 12px 14px 14px; display: grid; gap: 9px; }
 
-.pw { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 9px; }
+.pw { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 9px; }
 
 .pw-name {
   font-family: var(--display);
@@ -307,17 +333,22 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 .pw-bar {
-  height: 9px;
-  background: rgba(232, 226, 210, 0.07);
   position: relative;
+  height: 11px;
   overflow: hidden;
+  background:
+    repeating-linear-gradient(90deg, rgba(232, 226, 210, 0.13) 0 1px, transparent 1px 10%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(232, 226, 210, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(232, 226, 210, 0.07);
 }
 
 .pw-fill {
   position: absolute;
   inset: 0 auto 0 0;
   transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 60%);
+  background-image: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.06) 46%, rgba(0, 0, 0, 0.3));
+  box-shadow: 1px 0 0 rgba(232, 226, 210, 0.5);
 }
 
 .pw-num {
@@ -600,15 +631,24 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   flex: none;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
   font-family: var(--display);
-  font-size: 11px;
-  color: var(--cinnabar);
-  border: 1px solid var(--cinnabar-dim);
+  font-weight: 700;
+  font-size: 12px;
+  color: #120b0a;
+  background: var(--cinnabar);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
-.caption.is-final .caption-no { color: var(--bronze); border-color: rgba(201, 162, 39, 0.6); }
+.caption.is-final .caption-no { background: var(--bronze); color: #131009; }
+
+/* 讲解：随年而来的事，用铜色，与朱砂的战事分开 */
+.caption.is-lore { border-top-color: var(--bronze); }
+.caption.is-lore .caption-name { color: #f0e2b8; }
+.caption.is-lore .caption-no { background: var(--seal, var(--bronze)); color: #0d1211; }
+.caption.is-lore .caption-dots { display: none; }
+.caption.is-lore .caption-line { color: var(--bone-2); }
 .caption.is-final .caption-line { color: #f0e4c6; }
 
 .caption-dots { display: flex; gap: 4px; margin-top: 9px; }
@@ -639,28 +679,49 @@ body.is-marching .stage-hint { opacity: 0; }
 .ruler-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
   gap: 18px;
   padding: 0 22px;
   border-top: 1px solid var(--patina-edge);
   box-shadow: 0 -1px 0 rgba(201, 162, 39, 0.16);
-  background: linear-gradient(180deg, #0e1414, #161d1c);
+  background: linear-gradient(180deg, #0d1313, #171e1d), var(--cast);
 }
 
 .play {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 9px 15px;
   color: var(--bone-2);
   border: 1px solid var(--patina-edge);
+  background: linear-gradient(180deg, rgba(232, 226, 210, 0.05), transparent);
+  box-shadow: inset 0 1px 0 rgba(232, 226, 210, 0.07);
   transition: color 0.16s, border-color 0.16s, background 0.16s;
 }
 
 .play:hover { color: var(--bone); border-color: var(--bronze-dim); background: rgba(201, 162, 39, 0.07); }
 .play-icon { font-size: 11px; color: var(--bronze); width: 10px; }
 .play-text { font-size: 12px; letter-spacing: 0.24em; text-indent: 0.24em; }
+
+.speed {
+  align-self: center;
+  margin-left: -8px;
+  padding: 5px 9px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--bone-3);
+  border: 1px solid var(--patina-edge);
+  transition: color 0.16s, border-color 0.16s, background 0.16s;
+}
+
+.speed:hover { color: var(--bone-2); border-color: #3c4a43; }
+
+.speed[aria-pressed="true"] {
+  color: #f0e6c4;
+  border-color: rgba(201, 162, 39, 0.55);
+  background: rgba(201, 162, 39, 0.1);
+}
 
 .ruler {
   position: relative;

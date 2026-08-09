@@ -94,7 +94,7 @@ let scrubbing = false;
 ruler.addEventListener('pointerdown', (e) => {
   if (e.target.closest('.act')) return;
   scrubbing = true;
-  endMarch();
+  hideCaption();
   if (detailMode !== 'act') showAct();
   ruler.setPointerCapture(e.pointerId);
   setYear(yearFromEvent(e));
@@ -104,7 +104,7 @@ ruler.addEventListener('pointermove', (e) => { if (scrubbing) setYear(yearFromEv
 ruler.addEventListener('pointerup', () => { scrubbing = false; syncChron(); });
 ruler.addEventListener('keydown', (e) => {
   const step = e.shiftKey ? 10 : 1;
-  if (detailMode === 'battle' && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) { endMarch(); showAct(); }
+  if (detailMode !== 'act' && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) { hideCaption(); showAct(); }
   if (e.key === 'ArrowLeft') { setYear(year - step); pause(); }
   else if (e.key === 'ArrowRight') { setYear(year + step); pause(); }
   else if (e.key === 'Home') { setYear(START); pause(); }
@@ -133,7 +133,7 @@ $('chron').addEventListener('click', (e) => {
   if (!li) return;
   pause();
   if (li.dataset.battle) { setYear(+li.dataset.year); selectBattle(li.dataset.battle, true); }
-  else { endMarch(); setYear(+li.dataset.year); showEvent(EVENTS[+li.dataset.i]); }
+  else { setYear(+li.dataset.year); showEvent(EVENTS[+li.dataset.i]); }
 });
 
 function syncChron() {
@@ -188,7 +188,7 @@ function showAct() {
   const a = actAt(year);
   if (actShown === a) return;
   actShown = a;
-  const wars = BATTLES.filter((b) => b.year >= a.from && b.year <= a.to);
+  const wars = BATTLES.filter((b) => b.year >= a.from && b.year <= a.to).sort((x, y) => x.year - y.year);
   detail.innerHTML = `<p class="dt-eyebrow">第${a.no}幕</p>
     <p class="dt-title">${a.title}</p>
     <p class="dt-sub">${formatYear(a.from)} — ${formatYear(a.to)}</p>
@@ -198,11 +198,11 @@ function showAct() {
         `<li><button data-battle="${b.id}"><i>${formatYear(b.year)}</i>${b.name}</button></li>`).join('')}</ul></div>`;
 }
 
-function showEvent(e) {
+function showEvent(e, narrate = true) {
   detailMode = 'event';
   actShown = null;
   table.selected = null;
-  endMarch();
+  if (narrate) showLore(e); else endMarch();
   detail.innerHTML = `<p class="dt-eyebrow">${e.kind === '变' ? '变法' : e.kind === '纵' ? '纵横' : e.kind === '并' ? '兼并' : '迁都'}</p>
     <p class="dt-title">${e.title}</p>
     <p class="dt-sub">${formatYear(e.year)} · ${eraOf(e.year)}</p>
@@ -260,12 +260,16 @@ detail.addEventListener('click', (e) => {
 /* ── 推演：盘面接管，解说随军而走 ─────────────── */
 
 let march = null;
+const cap = $('caption');
+
+const SEALS = { 战: '#c8352b', 变: '#8fae4e', 纵: '#4a9db4', 并: '#c9a227', 都: '#9b66ad', 学: '#b98cc4', 工: '#a8845c' };
 
 function startMarch(b) {
   march = { battle: b, step: -1 };
   table.play(b);
   document.body.classList.add('is-marching');
-  $('caption').hidden = false;
+  cap.hidden = false;
+  cap.classList.remove('is-lore');
   $('capName').textContent = b.name;
   $('capYear').textContent = `${formatYear(b.year)} · ${eraOf(b.year)}`;
   $('capDots').innerHTML = b.steps.map(() => '<i></i>').join('');
@@ -279,7 +283,28 @@ function endMarch(home = true) {
   if (home) table.flyHome();
   table.selected = null;
   document.body.classList.remove('is-marching');
-  $('caption').hidden = true;
+  cap.hidden = true;
+}
+
+// 讲解：把随年而来的事说在盘上，而不是只躺在左栏里
+function showLore(e) {
+  endMarch();
+  cap.hidden = false;
+  cap.classList.add('is-lore');
+  cap.classList.remove('is-final');
+  cap.style.setProperty('--seal', SEALS[e.kind] || 'var(--bronze)');
+  $('capName').textContent = e.title;
+  $('capYear').textContent = `${formatYear(e.year)} · ${eraOf(e.year)}`;
+  $('capNo').textContent = e.kind;
+  $('capText').textContent = e.text;
+  $('capDots').innerHTML = '';
+}
+
+function hideCaption() {
+  endMarch();
+  cap.hidden = true;
+  queue = [];
+  loreUntil = 0;
 }
 
 const NUMERALS = ['一', '二', '三', '四', '五', '六'];
@@ -297,7 +322,7 @@ function syncCaption(force = false) {
   $('caption').classList.toggle('is-final', step >= march.battle.steps.length - 1);
 }
 
-$('capClose').addEventListener('click', () => endMarch());
+$('capClose').addEventListener('click', () => { hideCaption(); pause(); });
 
 /* ── 主循环 ───────────────────────────────────── */
 
@@ -321,9 +346,24 @@ function setYear(y, animate = true) {
   const change = CHANGES.find((c) => c.year === year && c.note);
   if (change && animate) showToast(`${formatYear(year)} · ${change.note}`);
   if (playing) {
-    const hit = BATTLES.find((b) => b.year === year);
-    if (hit) selectBattle(hit.id);
+    const evs = EVENTS.filter((e) => e.year === year);
+    const war = evs.find((e) => e.battle);
+    queue = evs.filter((e) => !e.battle);
+    loreUntil = 0;
+    if (war) selectBattle(war.battle);
+    else if (queue.length) nextLore(performance.now());
   }
+}
+
+let queue = [];
+let loreUntil = 0;
+
+function nextLore(now) {
+  const e = queue.shift();
+  if (!e) return;
+  showLore(e);
+  if (playing) showAct();
+  loreUntil = now + dwell(e);
 }
 
 let toastTimer = 0;
@@ -342,7 +382,7 @@ function showToast(text) {
 function toggle() { playing ? pause() : start(); }
 
 function start() {
-  if (year >= END) { endMarch(); setYear(START, false); }
+  if (year >= END) { hideCaption(); setYear(START, false); }
   playing = true;
   lastTick = performance.now();
   $('playIcon').textContent = '❚❚';
@@ -355,9 +395,24 @@ function pause() {
   $('playText').textContent = '推演';
 }
 
-// 有事的年份值得停一停，平淡的年份一带而过
-const NOTABLE = new Set([...EVENTS.map((e) => e.year), ...CHANGES.map((c) => c.year)]);
-const dwell = (y) => (NOTABLE.has(y) ? 1500 : 55);
+// 平淡的年份一带而过；有事的年份按其字数留出读完的工夫
+// 只为「疆域动了但无事可讲」的年份留驻足；有事的年份由讲解自己决定长短
+const EVENT_YEARS = new Set(EVENTS.map((e) => e.year));
+const NOTABLE = new Set(CHANGES.map((c) => c.year).filter((y) => !EVENT_YEARS.has(y)));
+let speed = 1;
+
+function dwell(x) {
+  if (typeof x === 'object') {
+    return Math.min(5600, 1500 + (x.title.length + x.text.length) * 62) * speed;
+  }
+  return NOTABLE.has(x) ? 1250 * speed : 55;
+}
+
+$('btnSpeed').addEventListener('click', () => {
+  speed = speed === 1 ? 0.5 : 1;
+  const on = speed !== 1;
+  $('btnSpeed').setAttribute('aria-pressed', String(on));
+});
 
 $('btnPlay').addEventListener('click', toggle);
 
@@ -370,9 +425,16 @@ function frame(now) {
     } else if (march) {
       endMarch();
       showAct();
-      lastTick = now + 450;
+      if (queue.length) nextLore(now + 300);
+      lastTick = now + 300;
+    } else if (loreUntil > now) {
+      lastTick = now;
+    } else if (queue.length) {
+      nextLore(now);
+      lastTick = now;
     } else if (now - lastTick > dwell(year)) {
       lastTick = now;
+      if (!cap.hidden) cap.hidden = true;
       if (year >= END) pause(); else setYear(year + 1);
     }
   }
@@ -456,7 +518,7 @@ canvas.addEventListener('pointerup', (e) => {
   const b = table.battleAt(px, py);
   if (b) { pause(); selectBattle(b.id, true); return; }
   const i = table.regionAt(px, py);
-  if (i >= 0) { endMarch(); showRegion(i); }
+  if (i >= 0) { hideCaption(); showRegion(i); }
 });
 
 canvas.addEventListener('pointercancel', (e) => { touches.delete(e.pointerId); pinch = null; dragging = null; });
@@ -490,6 +552,8 @@ document.addEventListener('keydown', (e) => {
 new ResizeObserver(() => table.resize()).observe(stage);
 
 /* ── 启程 ─────────────────────────────────────── */
+
+if (document.fonts) document.fonts.load('700 24px "Sandtable Serif"').catch(() => {});
 
 buildRuler();
 buildChron();

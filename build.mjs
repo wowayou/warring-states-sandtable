@@ -14,7 +14,11 @@ function strip(code) {
     .trim();
 }
 
-const css = await read('src/style.css');
+const font = await readFile(new URL('assets/display.woff2', root));
+const css = (await read('src/style.css')).replace(
+  'url("../assets/display.woff2") format("woff2")',
+  `url(data:font/woff2;base64,${font.toString('base64')}) format("woff2")`
+);
 const js = (await Promise.all(ORDER.map(read))).map(strip).join('\n\n');
 const html = await read('index.html');
 
