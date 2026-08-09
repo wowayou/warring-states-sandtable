@@ -482,6 +482,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .stage {
   position: relative;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: #06090a;
   box-shadow:
     inset 0 0 0 1px rgba(201, 162, 39, 0.08),
@@ -499,7 +501,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
     radial-gradient(120% 90% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.5) 100%);
 }
 
+/* 绝对定位：canvas 的属性高度若参与栅格计算，会把行撑大再反过来放大画布 */
 #table {
+  position: absolute;
+  inset: 0;
   display: block;
   touch-action: none;
   width: 100%;
@@ -702,7 +707,7 @@ body.is-marching .stage-hint { opacity: 0; }
 .ruler-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: auto auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto auto auto minmax(0, 1fr);
   align-items: center;
   gap: 18px;
   padding: 0 22px;
@@ -900,4 +905,217 @@ body.is-marching .stage-hint { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   #table { animation: none; opacity: 1; }
   * { transition-duration: 0.01ms !important; }
+}
+
+
+/* ── 放映：藏起两侧，只留盘、字与年 ─────────────── */
+
+.cine-btn[aria-pressed="true"] {
+  color: #f4ded6;
+  border-color: var(--cinnabar-dim);
+  background: rgba(200, 53, 43, 0.16);
+}
+
+.cine-hud,
+.act-card { display: none; }
+
+body.is-cinema { overflow: hidden; }
+
+body.is-cinema .board { grid-template-columns: minmax(0, 1fr); }
+body.is-cinema .panel,
+body.is-cinema .rail-layers,
+body.is-cinema .stage-tools,
+body.is-cinema .stage-hint,
+body.is-cinema .disclaimer,
+body.is-cinema .tick-label,
+body.is-cinema .ruler-cursor-year { display: none; }
+
+body.is-cinema .rail {
+  height: 46px;
+  border-bottom-color: transparent;
+  box-shadow: none;
+  background: linear-gradient(180deg, #0a0f10, transparent);
+}
+
+body.is-cinema .rail-title h1 { font-size: 17px; opacity: 0.65; }
+body.is-cinema .rail-act,
+body.is-cinema .rail-year { display: none; }
+body.is-cinema .frame { grid-template-rows: 46px 1fr 44px; }
+body.is-cinema .stage { box-shadow: none; }
+
+body.is-cinema .ruler-wrap {
+  background: linear-gradient(0deg, #0a0f10, transparent);
+  border-top: 0;
+  box-shadow: none;
+  padding: 0 20px 6px;
+  gap: 12px;
+}
+
+body.is-cinema .ruler { height: 26px; }
+body.is-cinema .tick { opacity: 0.4; }
+body.is-cinema .act { height: 12px; font-size: 0; border-left-color: rgba(201, 162, 39, 0.35); }
+body.is-cinema .act b { display: none; }
+body.is-cinema .mark { top: 14px; height: 6px; }
+body.is-cinema .ruler-cursor { top: 12px; }
+
+/* 幕次与纪年，压在画面的两角 */
+body.is-cinema .cine-hud {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.cine-act {
+  position: absolute;
+  top: 26px;
+  left: 30px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: rgba(240, 232, 208, 0.82);
+  text-shadow: 0 2px 14px #000;
+}
+
+.cine-act span:first-child {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: #0d1211;
+  background: var(--bronze);
+}
+
+.cine-year {
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  margin: 0;
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(232, 210, 150, 0.9);
+  text-shadow: 0 2px 18px #000;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 解说压成下三分之一 */
+body.is-cinema .caption {
+  left: 30px;
+  bottom: 34px;
+  width: min(760px, calc(100% - 60px));
+  transform: none;
+  padding: 0 0 0 16px;
+  background: none;
+  border: 0;
+  border-left: 3px solid var(--cinnabar);
+  box-shadow: none;
+  animation: none;
+}
+
+body.is-cinema .caption.is-lore { border-left-color: var(--bronze); }
+body.is-cinema .caption-close { display: none; }
+body.is-cinema .caption-head { margin-bottom: 4px; }
+body.is-cinema .caption-name { font-size: 19px; letter-spacing: 0.16em; text-shadow: 0 2px 12px #000; }
+body.is-cinema .caption-line { font-size: 17px; line-height: 1.7; text-shadow: 0 2px 12px #000; }
+body.is-cinema .caption-no { width: 24px; height: 24px; font-size: 13px; }
+body.is-cinema .caption-dots { max-width: 260px; margin-top: 12px; }
+
+body.is-cinema .stage::after {
+  background:
+    radial-gradient(70% 55% at 26% 12%, rgba(255, 236, 190, 0.05), transparent 62%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent 16%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.72), transparent 30%);
+}
+
+/* 幕起字卡 */
+body.is-cinema .act-card {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  padding: 0 clamp(32px, 9vw, 140px);
+  background: rgba(6, 9, 10, 0.82);
+  pointer-events: none;
+  animation: cardIn 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.act-card[hidden] { display: none !important; }
+
+@keyframes cardIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.act-card.is-out { animation: cardOut 0.7s ease forwards; }
+
+@keyframes cardOut {
+  to { opacity: 0; }
+}
+
+.act-card-no {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-family: var(--display);
+  font-size: 13px;
+  letter-spacing: 0.5em;
+  color: var(--bronze);
+}
+
+.act-card-no i {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  font-style: normal;
+  font-size: 14px;
+  letter-spacing: 0;
+  color: #0d1211;
+  background: var(--bronze);
+}
+
+.act-card-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(38px, 6.5vw, 82px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #f4eddb;
+  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.9);
+}
+
+.act-card-span {
+  margin: 12px 0 22px;
+  font-family: var(--num);
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--bronze-dim);
+}
+
+.act-card-thesis {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 16px;
+  line-height: 1.95;
+  color: rgba(232, 226, 210, 0.72);
+}
+
+@media (max-width: 820px) {
+  body.is-cinema .caption { left: 16px; bottom: 20px; width: calc(100% - 32px); }
+  body.is-cinema .caption-line { font-size: 15px; }
+  .cine-year { font-size: 24px; top: 14px; right: 18px; }
+  .cine-act { top: 16px; left: 18px; font-size: 13px; }
 }

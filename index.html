@@ -54,6 +54,16 @@
         <button class="tool" id="btnZoomOut" title="缩小">－</button>
       </div>
       <div class="tip" id="tip" hidden></div>
+      <div class="cine-hud" id="cineHud" aria-hidden="true">
+        <p class="cine-act"><span id="cineActNo">一</span><span id="cineActTitle"></span></p>
+        <p class="cine-year" id="cineYear">前475</p>
+      </div>
+      <div class="act-card" id="actCard" hidden>
+        <p class="act-card-no"><i id="cardNo">一</i>幕</p>
+        <h2 class="act-card-title" id="cardTitle"></h2>
+        <p class="act-card-span" id="cardSpan"></p>
+        <p class="act-card-thesis" id="cardThesis"></p>
+      </div>
     </section>
 
     <aside class="panel panel-right">
@@ -70,6 +80,7 @@
     </button>
     <button class="speed" id="btnSpeed" aria-pressed="false" title="解说停留时长减半">倍速</button>
     <button class="speed" id="btnSound" aria-pressed="false" title="朗读解说，战事落定敲一记编钟">朗读</button>
+    <button class="speed cine-btn" id="btnCinema" title="放映：藏起两侧，镜头随解说游走">放映</button>
     <div class="ruler" id="ruler" role="slider" tabindex="0"
          aria-label="纪年" aria-valuemin="-475" aria-valuemax="-221" aria-valuenow="-475" aria-valuetext="前475年">
       <div class="ruler-acts" id="acts"></div>

@@ -484,6 +484,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .stage {
   position: relative;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: #06090a;
   box-shadow:
     inset 0 0 0 1px rgba(201, 162, 39, 0.08),
@@ -501,7 +503,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
     radial-gradient(120% 90% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.5) 100%);
 }
 
+/* 绝对定位：canvas 的属性高度若参与栅格计算，会把行撑大再反过来放大画布 */
 #table {
+  position: absolute;
+  inset: 0;
   display: block;
   touch-action: none;
   width: 100%;
@@ -704,7 +709,7 @@ body.is-marching .stage-hint { opacity: 0; }
 .ruler-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: auto auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto auto auto minmax(0, 1fr);
   align-items: center;
   gap: 18px;
   padding: 0 22px;
@@ -904,6 +909,219 @@ body.is-marching .stage-hint { opacity: 0; }
   * { transition-duration: 0.01ms !important; }
 }
 
+
+/* ── 放映：藏起两侧，只留盘、字与年 ─────────────── */
+
+.cine-btn[aria-pressed="true"] {
+  color: #f4ded6;
+  border-color: var(--cinnabar-dim);
+  background: rgba(200, 53, 43, 0.16);
+}
+
+.cine-hud,
+.act-card { display: none; }
+
+body.is-cinema { overflow: hidden; }
+
+body.is-cinema .board { grid-template-columns: minmax(0, 1fr); }
+body.is-cinema .panel,
+body.is-cinema .rail-layers,
+body.is-cinema .stage-tools,
+body.is-cinema .stage-hint,
+body.is-cinema .disclaimer,
+body.is-cinema .tick-label,
+body.is-cinema .ruler-cursor-year { display: none; }
+
+body.is-cinema .rail {
+  height: 46px;
+  border-bottom-color: transparent;
+  box-shadow: none;
+  background: linear-gradient(180deg, #0a0f10, transparent);
+}
+
+body.is-cinema .rail-title h1 { font-size: 17px; opacity: 0.65; }
+body.is-cinema .rail-act,
+body.is-cinema .rail-year { display: none; }
+body.is-cinema .frame { grid-template-rows: 46px 1fr 44px; }
+body.is-cinema .stage { box-shadow: none; }
+
+body.is-cinema .ruler-wrap {
+  background: linear-gradient(0deg, #0a0f10, transparent);
+  border-top: 0;
+  box-shadow: none;
+  padding: 0 20px 6px;
+  gap: 12px;
+}
+
+body.is-cinema .ruler { height: 26px; }
+body.is-cinema .tick { opacity: 0.4; }
+body.is-cinema .act { height: 12px; font-size: 0; border-left-color: rgba(201, 162, 39, 0.35); }
+body.is-cinema .act b { display: none; }
+body.is-cinema .mark { top: 14px; height: 6px; }
+body.is-cinema .ruler-cursor { top: 12px; }
+
+/* 幕次与纪年，压在画面的两角 */
+body.is-cinema .cine-hud {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.cine-act {
+  position: absolute;
+  top: 26px;
+  left: 30px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: rgba(240, 232, 208, 0.82);
+  text-shadow: 0 2px 14px #000;
+}
+
+.cine-act span:first-child {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: #0d1211;
+  background: var(--bronze);
+}
+
+.cine-year {
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  margin: 0;
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(232, 210, 150, 0.9);
+  text-shadow: 0 2px 18px #000;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 解说压成下三分之一 */
+body.is-cinema .caption {
+  left: 30px;
+  bottom: 34px;
+  width: min(760px, calc(100% - 60px));
+  transform: none;
+  padding: 0 0 0 16px;
+  background: none;
+  border: 0;
+  border-left: 3px solid var(--cinnabar);
+  box-shadow: none;
+  animation: none;
+}
+
+body.is-cinema .caption.is-lore { border-left-color: var(--bronze); }
+body.is-cinema .caption-close { display: none; }
+body.is-cinema .caption-head { margin-bottom: 4px; }
+body.is-cinema .caption-name { font-size: 19px; letter-spacing: 0.16em; text-shadow: 0 2px 12px #000; }
+body.is-cinema .caption-line { font-size: 17px; line-height: 1.7; text-shadow: 0 2px 12px #000; }
+body.is-cinema .caption-no { width: 24px; height: 24px; font-size: 13px; }
+body.is-cinema .caption-dots { max-width: 260px; margin-top: 12px; }
+
+body.is-cinema .stage::after {
+  background:
+    radial-gradient(70% 55% at 26% 12%, rgba(255, 236, 190, 0.05), transparent 62%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent 16%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.72), transparent 30%);
+}
+
+/* 幕起字卡 */
+body.is-cinema .act-card {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  padding: 0 clamp(32px, 9vw, 140px);
+  background: rgba(6, 9, 10, 0.82);
+  pointer-events: none;
+  animation: cardIn 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.act-card[hidden] { display: none !important; }
+
+@keyframes cardIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.act-card.is-out { animation: cardOut 0.7s ease forwards; }
+
+@keyframes cardOut {
+  to { opacity: 0; }
+}
+
+.act-card-no {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-family: var(--display);
+  font-size: 13px;
+  letter-spacing: 0.5em;
+  color: var(--bronze);
+}
+
+.act-card-no i {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  font-style: normal;
+  font-size: 14px;
+  letter-spacing: 0;
+  color: #0d1211;
+  background: var(--bronze);
+}
+
+.act-card-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(38px, 6.5vw, 82px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #f4eddb;
+  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.9);
+}
+
+.act-card-span {
+  margin: 12px 0 22px;
+  font-family: var(--num);
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--bronze-dim);
+}
+
+.act-card-thesis {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 16px;
+  line-height: 1.95;
+  color: rgba(232, 226, 210, 0.72);
+}
+
+@media (max-width: 820px) {
+  body.is-cinema .caption { left: 16px; bottom: 20px; width: calc(100% - 32px); }
+  body.is-cinema .caption-line { font-size: 15px; }
+  .cine-year { font-size: 24px; top: 14px; right: 18px; }
+  .cine-act { top: 16px; left: 18px; font-size: 13px; }
+}
+
 </style>
 <div class="frame">
 
@@ -951,6 +1169,16 @@ body.is-marching .stage-hint { opacity: 0; }
         <button class="tool" id="btnZoomOut" title="缩小">－</button>
       </div>
       <div class="tip" id="tip" hidden></div>
+      <div class="cine-hud" id="cineHud" aria-hidden="true">
+        <p class="cine-act"><span id="cineActNo">一</span><span id="cineActTitle"></span></p>
+        <p class="cine-year" id="cineYear">前475</p>
+      </div>
+      <div class="act-card" id="actCard" hidden>
+        <p class="act-card-no"><i id="cardNo">一</i>幕</p>
+        <h2 class="act-card-title" id="cardTitle"></h2>
+        <p class="act-card-span" id="cardSpan"></p>
+        <p class="act-card-thesis" id="cardThesis"></p>
+      </div>
     </section>
 
     <aside class="panel panel-right">
@@ -967,6 +1195,7 @@ body.is-marching .stage-hint { opacity: 0; }
     </button>
     <button class="speed" id="btnSpeed" aria-pressed="false" title="解说停留时长减半">倍速</button>
     <button class="speed" id="btnSound" aria-pressed="false" title="朗读解说，战事落定敲一记编钟">朗读</button>
+    <button class="speed cine-btn" id="btnCinema" title="放映：藏起两侧，镜头随解说游走">放映</button>
     <div class="ruler" id="ruler" role="slider" tabindex="0"
          aria-label="纪年" aria-valuemin="-475" aria-valuemax="-221" aria-valuenow="-475" aria-valuetext="前475年">
       <div class="ruler-acts" id="acts"></div>
@@ -2027,76 +2256,76 @@ const BATTLES = [
 
 // 非战之大事
 const OTHER_EVENTS = [
-  { year: -479, kind: '学', title: '孔子卒', text: '哲人其萎。其后儒分为八，墨离为三，诸子之言纷起——争的已不是礼，是天下当如何治。' },
+  { year: -479, kind: '学', title: '孔子卒', at: [116.99, 35.6], text: '哲人其萎。其后儒分为八，墨离为三，诸子之言纷起——争的已不是礼，是天下当如何治。' },
   { year: -475, kind: '工', title: '铁耕之世', text: '铁农具与牛耕自此普及，一夫百亩之家可自立。井田之下的族群耕作瓦解，编户齐民与郡县之制由此而生。' },
-  { year: -473, kind: '并', title: '越灭吴', text: '勾践二十年生聚教训，卒灭吴而北会诸侯于徐州，号称霸王。春秋之霸业，终于此。' },
-  { year: -468, kind: '都', title: '越徙都琅琊', text: '句践北迁于琅琊，观兵中原。越之国势至此而极，然去其江海根本，亦伏后来之衰。' },
-  { year: -458, kind: '并', title: '四卿分范、中行之地', text: '智、赵、韩、魏尽分二卿故地，晋公室仅食绛与曲沃。智伯专政，益骄。' },
-  { year: -453, kind: '并', title: '三家分晋', text: '赵魏韩共灭智氏而分其地，晋国实亡。司马光以此年为战国之始的另一说。' },
-  { year: -445, kind: '变', title: '李悝相魏', text: '尽地力之教，籴甚贵伤民、甚贱伤农，故设平籴以敛散；著《法经》六篇。变法自此为战国之通例。' },
-  { year: -440, kind: '学', title: '墨子止楚攻宋', text: '公输般为云梯，墨翟行十日十夜至郢，解带为城、以牒为械，九攻九拒而械尽。楚王遂罢兵。' },
-  { year: -424, kind: '变', title: '魏文侯礼贤', text: '师卜子夏，友田子方，敬段干木。西河之学与三晋之法，皆自此门出。' },
-  { year: -409, kind: '变', title: '吴起为西河守', text: '创魏武卒之制：衣三属之甲、操十二石之弩、负矢五十，日中而趋百里，中试者复其户。天下强兵之始。' },
-  { year: -403, kind: '纵', title: '周威烈王命三晋为诸侯', text: '名分既坏，君臣之礼遂亡。《资治通鉴》以此年开卷，谓「非三晋之坏礼，乃天子自坏之」。' },
-  { year: -396, kind: '变', title: '魏文侯卒', text: '在位五十年，魏为天下第一强。武侯继之，弃西河之贤而任亲贵，吴起遂奔楚。' },
-  { year: -386, kind: '并', title: '田氏代齐', text: '田和列为诸侯，姜姓之齐传二十余世而绝。太公之后，遂为陈完之裔。' },
-  { year: -382, kind: '变', title: '吴起变法于楚', text: '废公族疏远者以抚养战斗之士，明法审令，捐不急之官。南平百越，北却三晋，西伐秦。' },
-  { year: -381, kind: '变', title: '楚悼王卒，吴起被诛', text: '宗室大臣射起于王尸之上。肃王立，以中王尸罪夷宗死者七十余家——变法虽废，王权反强。' },
-  { year: -376, kind: '并', title: '晋绝祀', text: '韩赵魏废晋静公为庶人，尽分其地。唐叔虞之封，至此六百余年而终。' },
-  { year: -375, kind: '并', title: '韩灭郑', text: '郑自桓公东迁，四百三十二年而亡。韩徙都新郑，遂为中原之强。' },
-  { year: -374, kind: '学', title: '稷下学宫', text: '田齐设学宫于稷门之下，不治而议论。淳于髡、邹衍、慎到、荀卿先后居之，天下辩士辐辏于临淄。' },
-  { year: -370, kind: '战', title: '魏之内乱', text: '武侯卒而不立太子，公中缓与惠王争国，韩赵伐之而围安邑。二国意见不合而退，魏得以不分。' },
-  { year: -361, kind: '都', title: '魏徙都大梁', text: '惠王自安邑东迁，图霸中原。然大梁居四战之地，自此与秦隔河，不复能制其东出。' },
-  { year: -361, kind: '变', title: '秦孝公求贤令', text: '「宾客群臣有能出奇计强秦者，吾且尊官，与之分土。」卫鞅闻是令而西入秦。' },
-  { year: -356, kind: '变', title: '商鞅第一次变法', text: '什伍连坐、告奸者与斩敌同赏、有军功者各以率受上爵、宗室非有军功论不得为属籍。徙木立信，法乃行。' },
-  { year: -350, kind: '变', title: '商鞅第二次变法·徙都咸阳', text: '并诸小乡为三十一县，为田开阡陌封疆，平斗桶权衡丈尺。秦自此耕战一体，赏罚必信。' },
-  { year: -344, kind: '纵', title: '逢泽之会', text: '魏惠王率十二诸侯朝天子于孟津，乘夏车、称夏王。霸业之顶，亦其转折——齐楚由是恶之。' },
-  { year: -340, kind: '并', title: '商鞅诈虏公子卬', text: '故人饮盟而伏甲虏之，魏师大破。魏惠王叹「寡人恨不用公叔痤之言」，献河西之地而去安邑。' },
-  { year: -338, kind: '变', title: '商鞅车裂', text: '孝公卒，惠文王立，商君走而无所舍——「为法之敝，一至此哉」。人亡而法不亡，秦制自此二世不改。' },
-  { year: -334, kind: '纵', title: '徐州相王', text: '齐魏会于徐州而互尊为王。周天子之号自此不足贵，天下遂无共主。' },
-  { year: -333, kind: '纵', title: '苏秦约纵', text: '佩六国相印，合纵以摈秦。史称秦兵十五年不敢窥函谷关——纵之利，在其势而不在其实。' },
-  { year: -328, kind: '纵', title: '张仪相秦', text: '连横之术起：事一强以攻众弱。散六国之从而使之西面事秦，一辩士之口，胜十万之师。' },
-  { year: -325, kind: '纵', title: '秦惠文君称王', text: '秦亦称王，改元。周室之下，遂有七王并立。' },
-  { year: -323, kind: '纵', title: '五国相王', text: '魏韩赵燕中山互王。中山以千乘之国而王，赵怒之，伏他日灭国之因。' },
-  { year: -320, kind: '学', title: '孟子见梁惠王', text: '「王何必曰利？亦有仁义而已矣。」王顾左右——其言迂远而阔于事情，然二千年后犹在。' },
-  { year: -316, kind: '纵', title: '燕王哙让国于子之', text: '效尧舜之禅而不度其时，国大乱。齐宣王乘之，五十日而举燕——让国之美名，几亡其社稷。' },
-  { year: -314, kind: '并', title: '齐取燕', text: '齐师入蓟，杀子之与燕王哙。诸侯将谋救燕，齐乃退。燕人立昭王，二十八年之复仇自此始。' },
-  { year: -311, kind: '变', title: '燕昭王筑黄金台', text: '卑身厚币以招贤者，郭隗、乐毅、剧辛、邹衍皆至。「先从隗始」，士争凑燕。' },
-  { year: -307, kind: '变', title: '赵武灵王胡服骑射', text: '去长裾而习骑射，排众议而行之。北破林胡楼烦，辟地千里，置云中、雁门、代郡。中原骑兵之始。' },
-  { year: -306, kind: '并', title: '楚灭越', text: '越内乱而楚乘之，尽取故吴地至浙江。越以其族散处江南海上，为君长者不可胜数。' },
-  { year: -299, kind: '纵', title: '楚怀王入秦', text: '不听屈原之谏而赴武关之会，遂被扣于咸阳，三年而客死。诸侯由是不直秦——然亦无人能伐。' },
-  { year: -296, kind: '并', title: '赵灭中山', text: '迁其王于肤施。白狄之国，五世而终。赵地南北始连成一片。' },
-  { year: -295, kind: '变', title: '沙丘之变', text: '武灵王欲分赵为二，父子兄弟相攻，主父困于沙丘宫三月，探雀鷇而食，卒饿死。' },
-  { year: -288, kind: '纵', title: '秦称西帝·齐称东帝', text: '两强并帝，苏代说齐去帝号以孤秦。两月而罢，然天下已知只余两极。' },
-  { year: -286, kind: '并', title: '齐灭宋', text: '取膏腴之地而结怨于天下。宋康王偃射天笞地，号「桀宋」，然其地富，诸侯皆欲之。' },
-  { year: -283, kind: '纵', title: '完璧归赵', text: '蔺相如奉璧入秦，倚柱怒发，秦不予城而璧完归。小国之尊严，有时只在一人之胆。' },
-  { year: -279, kind: '纵', title: '渑池之会', text: '秦王令赵王鼓瑟，相如请秦王击缶，以颈血溅之相胁。归而位在廉颇之上，遂有负荆之请。' },
-  { year: -278, kind: '学', title: '屈原沉江', text: '郢既破，作《哀郢》而怀沙自沉于汨罗。「亦余心之所善兮，虽九死其犹未悔。」' },
-  { year: -276, kind: '纵', title: '信陵君封', text: '魏公子无忌仁而下士，食客三千。诸侯以公子贤，十余年不敢加兵谋魏。' },
-  { year: -270, kind: '变', title: '范雎入秦', text: '折胁摺齿而逃于秦，说昭王曰：「秦国之政，闻有太后、穰侯，不闻有王。」' },
-  { year: -268, kind: '纵', title: '远交近攻', text: '得寸则王之寸，得尺亦王之尺。秦之战略自此由掠地转为夺国——所并者不复归还。' },
-  { year: -266, kind: '变', title: '范雎为相，废穰侯', text: '收魏冉之权，逐泾阳、高陵于关外，太后废。秦王之权自此一统于上。' },
-  { year: -262, kind: '纵', title: '上党献赵', text: '韩以上党予秦，守冯亭不肯，转献于赵。平原君曰「发百万之军而攻，逾岁未得一城，今坐受十七城，此大利」——赵遂受之。' },
-  { year: -259, kind: '学', title: '秦王政生于邯郸', text: '子楚为质，吕不韦以为奇货可居。是岁生政，四十年后海内一统。' },
-  { year: -257, kind: '纵', title: '毛遂自荐', text: '平原君之楚请救，门下毛遂请行，按剑历阶而说楚王，一言而定纵约。「三寸之舌，强于百万之师。」' },
-  { year: -256, kind: '并', title: '秦灭西周·楚灭鲁', text: '周赧王卒，九鼎入秦，八百年之宗周绝。孔子之国亦亡于是年——旧秩序的两个象征同岁而尽。' },
-  { year: -256, kind: '工', title: '李冰守蜀·都江堰', text: '凿离堆，分内外江，旱则引水浸润，雨则杜塞水门。「水旱从人，不知饥馑」，蜀遂为天府。' },
-  { year: -251, kind: '战', title: '鄗代之战', text: '燕以栗腹将六十万乘赵新丧而伐之。廉颇以八万破燕于鄗，乐乘破之于代，反围燕都，燕割五城以请和。' },
-  { year: -250, kind: '变', title: '吕不韦为相', text: '庄襄王立，以不韦为丞相，封文信侯，食蓝田十二县。招致士人，著《吕氏春秋》，悬于咸阳市门。' },
-  { year: -249, kind: '并', title: '秦灭东周', text: '吕不韦攻东周君于巩，周祀遂绝。秦置三川郡，兵锋直抵中原。' },
-  { year: -246, kind: '工', title: '郑国渠成', text: '韩以疲秦之计使水工郑国凿渠。事觉，郑国曰「臣为韩延数岁之命，然为秦建万世之功」——渠成而关中为沃野，秦反以富强。' },
-  { year: -243, kind: '纵', title: '信陵君死', text: '秦行反间，魏王使人代将。公子谢病不朝，与宾客为长夜之饮，四岁而卒。魏之亡，自此可期。' },
-  { year: -241, kind: '都', title: '楚徙都寿春', text: '五国伐秦不成，楚畏秦而东迁，去陈就淮南。中原之国，至此皆背秦而走。' },
-  { year: -238, kind: '变', title: '秦王政亲政', text: '平嫪毐之乱，车裂之，夷三族；明年免吕不韦，徙蜀，饮鸩死。宗室外戚之权尽收。' },
-  { year: -237, kind: '变', title: '李斯《谏逐客书》', text: '「太山不让土壤，故能成其大；河海不择细流，故能就其深。」逐客令遂废，客卿复用。' },
-  { year: -236, kind: '变', title: '尉缭之策', text: '「愿大王毋爱财物，赂其豪臣以乱其谋，不过亡三十万金，而诸侯可尽。」谋臣先行，而后甲兵。' },
-  { year: -233, kind: '学', title: '韩非入秦', text: '秦王见《孤愤》《五蠹》曰「嗟乎，寡人得见此人与之游，死不恨矣」。既至，李斯毁之，下狱死于云阳——其书行于秦，其人不容于秦。' },
-  { year: -229, kind: '纵', title: '秦行反间杀李牧', text: '王翦攻赵，秦多与赵王宠臣郭开金，言牧欲反。赵王使赵葱代之，牧不受命，遂捕而杀之——三月后邯郸破。' },
-  { year: -227, kind: '纵', title: '荆轲刺秦王', text: '易水送别，风萧萧兮。图穷而匕首见，绕柱而走，卒不中。秦王大怒，益发兵诣赵，王翦遂北向燕。' },
-  { year: -225, kind: '战', title: '李信伐楚败绩', text: '李信言二十万可取楚，王翦曰非六十万不可。信果为项燕所破，亡七都尉。秦王驰入频阳谢王翦——「将军虽病，独忍弃寡人乎」。' },
-  { year: -222, kind: '并', title: '灭代·定江南', text: '王贲虏代王嘉，代亡；王翦降越君，置会稽郡。天下之大者，唯余齐一国。' },
-  { year: -221, kind: '并', title: '海内为郡县', text: '初并天下，号皇帝。分三十六郡，一法度衡石丈尺，车同轨，书同文字。「自上古以来未尝有，五帝所不及。」' },
-  { year: -221, kind: '工', title: '铸十二金人', text: '收天下兵聚之咸阳，销以为钟鐻、金人十二，各重千石，置廷宫中。徙天下豪富于咸阳十二万户。' },
+  { year: -473, kind: '并', title: '越灭吴', at: [120.6, 31.3], text: '勾践二十年生聚教训，卒灭吴而北会诸侯于徐州，号称霸王。春秋之霸业，终于此。' },
+  { year: -468, kind: '都', title: '越徙都琅琊', at: [119.2, 35.6], text: '句践北迁于琅琊，观兵中原。越之国势至此而极，然去其江海根本，亦伏后来之衰。' },
+  { year: -458, kind: '并', title: '四卿分范、中行之地', at: [111.55, 35.6], text: '智、赵、韩、魏尽分二卿故地，晋公室仅食绛与曲沃。智伯专政，益骄。' },
+  { year: -453, kind: '并', title: '三家分晋', at: [112.55, 37.87], text: '赵魏韩共灭智氏而分其地，晋国实亡。司马光以此年为战国之始的另一说。' },
+  { year: -445, kind: '变', title: '李悝相魏', at: [111.22, 35.14], text: '尽地力之教，籴甚贵伤民、甚贱伤农，故设平籴以敛散；著《法经》六篇。变法自此为战国之通例。' },
+  { year: -440, kind: '学', title: '墨子止楚攻宋', at: [112.19, 30.42], text: '公输般为云梯，墨翟行十日十夜至郢，解带为城、以牒为械，九攻九拒而械尽。楚王遂罢兵。' },
+  { year: -424, kind: '变', title: '魏文侯礼贤', at: [110.3, 35.6], text: '师卜子夏，友田子方，敬段干木。西河之学与三晋之法，皆自此门出。' },
+  { year: -409, kind: '变', title: '吴起为西河守', at: [110.3, 35.6], text: '创魏武卒之制：衣三属之甲、操十二石之弩、负矢五十，日中而趋百里，中试者复其户。天下强兵之始。' },
+  { year: -403, kind: '纵', title: '周威烈王命三晋为诸侯', at: [112.45, 34.68], text: '名分既坏，君臣之礼遂亡。《资治通鉴》以此年开卷，谓「非三晋之坏礼，乃天子自坏之」。' },
+  { year: -396, kind: '变', title: '魏文侯卒', at: [111.22, 35.14], text: '在位五十年，魏为天下第一强。武侯继之，弃西河之贤而任亲贵，吴起遂奔楚。' },
+  { year: -386, kind: '并', title: '田氏代齐', at: [118.31, 36.87], text: '田和列为诸侯，姜姓之齐传二十余世而绝。太公之后，遂为陈完之裔。' },
+  { year: -382, kind: '变', title: '吴起变法于楚', at: [112.19, 30.42], text: '废公族疏远者以抚养战斗之士，明法审令，捐不急之官。南平百越，北却三晋，西伐秦。' },
+  { year: -381, kind: '变', title: '楚悼王卒，吴起被诛', at: [112.19, 30.42], text: '宗室大臣射起于王尸之上。肃王立，以中王尸罪夷宗死者七十余家——变法虽废，王权反强。' },
+  { year: -376, kind: '并', title: '晋绝祀', at: [111.55, 35.6], text: '韩赵魏废晋静公为庶人，尽分其地。唐叔虞之封，至此六百余年而终。' },
+  { year: -375, kind: '并', title: '韩灭郑', at: [113.72, 34.4], text: '郑自桓公东迁，四百三十二年而亡。韩徙都新郑，遂为中原之强。' },
+  { year: -374, kind: '学', title: '稷下学宫', at: [118.31, 36.87], text: '田齐设学宫于稷门之下，不治而议论。淳于髡、邹衍、慎到、荀卿先后居之，天下辩士辐辏于临淄。' },
+  { year: -370, kind: '战', title: '魏之内乱', at: [111.22, 35.14], text: '武侯卒而不立太子，公中缓与惠王争国，韩赵伐之而围安邑。二国意见不合而退，魏得以不分。' },
+  { year: -361, kind: '都', title: '魏徙都大梁', at: [114.35, 34.79], text: '惠王自安邑东迁，图霸中原。然大梁居四战之地，自此与秦隔河，不复能制其东出。' },
+  { year: -361, kind: '变', title: '秦孝公求贤令', at: [107.4, 34.52], text: '「宾客群臣有能出奇计强秦者，吾且尊官，与之分土。」卫鞅闻是令而西入秦。' },
+  { year: -356, kind: '变', title: '商鞅第一次变法', at: [109.2, 34.7], text: '什伍连坐、告奸者与斩敌同赏、有军功者各以率受上爵、宗室非有军功论不得为属籍。徙木立信，法乃行。' },
+  { year: -350, kind: '变', title: '商鞅第二次变法·徙都咸阳', at: [108.72, 34.35], text: '并诸小乡为三十一县，为田开阡陌封疆，平斗桶权衡丈尺。秦自此耕战一体，赏罚必信。' },
+  { year: -344, kind: '纵', title: '逢泽之会', at: [114.35, 34.79], text: '魏惠王率十二诸侯朝天子于孟津，乘夏车、称夏王。霸业之顶，亦其转折——齐楚由是恶之。' },
+  { year: -340, kind: '并', title: '商鞅诈虏公子卬', at: [110.2, 35.4], text: '故人饮盟而伏甲虏之，魏师大破。魏惠王叹「寡人恨不用公叔痤之言」，献河西之地而去安邑。' },
+  { year: -338, kind: '变', title: '商鞅车裂', at: [108.72, 34.35], text: '孝公卒，惠文王立，商君走而无所舍——「为法之敝，一至此哉」。人亡而法不亡，秦制自此二世不改。' },
+  { year: -334, kind: '纵', title: '徐州相王', at: [117.2, 35.0], text: '齐魏会于徐州而互尊为王。周天子之号自此不足贵，天下遂无共主。' },
+  { year: -333, kind: '纵', title: '苏秦约纵', at: [112.45, 34.68], text: '佩六国相印，合纵以摈秦。史称秦兵十五年不敢窥函谷关——纵之利，在其势而不在其实。' },
+  { year: -328, kind: '纵', title: '张仪相秦', at: [108.72, 34.35], text: '连横之术起：事一强以攻众弱。散六国之从而使之西面事秦，一辩士之口，胜十万之师。' },
+  { year: -325, kind: '纵', title: '秦惠文君称王', at: [108.72, 34.35], text: '秦亦称王，改元。周室之下，遂有七王并立。' },
+  { year: -323, kind: '纵', title: '五国相王', at: [114.5, 38.5], text: '魏韩赵燕中山互王。中山以千乘之国而王，赵怒之，伏他日灭国之因。' },
+  { year: -320, kind: '学', title: '孟子见梁惠王', at: [114.35, 34.79], text: '「王何必曰利？亦有仁义而已矣。」王顾左右——其言迂远而阔于事情，然二千年后犹在。' },
+  { year: -316, kind: '纵', title: '燕王哙让国于子之', at: [116.4, 39.9], text: '效尧舜之禅而不度其时，国大乱。齐宣王乘之，五十日而举燕——让国之美名，几亡其社稷。' },
+  { year: -314, kind: '并', title: '齐取燕', at: [116.4, 39.9], text: '齐师入蓟，杀子之与燕王哙。诸侯将谋救燕，齐乃退。燕人立昭王，二十八年之复仇自此始。' },
+  { year: -311, kind: '变', title: '燕昭王筑黄金台', at: [115.8, 39.2], text: '卑身厚币以招贤者，郭隗、乐毅、剧辛、邹衍皆至。「先从隗始」，士争凑燕。' },
+  { year: -307, kind: '变', title: '赵武灵王胡服骑射', at: [114.49, 36.6], text: '去长裾而习骑射，排众议而行之。北破林胡楼烦，辟地千里，置云中、雁门、代郡。中原骑兵之始。' },
+  { year: -306, kind: '并', title: '楚灭越', at: [120.6, 30.0], text: '越内乱而楚乘之，尽取故吴地至浙江。越以其族散处江南海上，为君长者不可胜数。' },
+  { year: -299, kind: '纵', title: '楚怀王入秦', at: [110.6, 33.5], text: '不听屈原之谏而赴武关之会，遂被扣于咸阳，三年而客死。诸侯由是不直秦——然亦无人能伐。' },
+  { year: -296, kind: '并', title: '赵灭中山', at: [114.5, 38.5], text: '迁其王于肤施。白狄之国，五世而终。赵地南北始连成一片。' },
+  { year: -295, kind: '变', title: '沙丘之变', at: [115.0, 37.4], text: '武灵王欲分赵为二，父子兄弟相攻，主父困于沙丘宫三月，探雀鷇而食，卒饿死。' },
+  { year: -288, kind: '纵', title: '秦称西帝·齐称东帝', at: [118.31, 36.87], text: '两强并帝，苏代说齐去帝号以孤秦。两月而罢，然天下已知只余两极。' },
+  { year: -286, kind: '并', title: '齐灭宋', at: [115.65, 34.41], text: '取膏腴之地而结怨于天下。宋康王偃射天笞地，号「桀宋」，然其地富，诸侯皆欲之。' },
+  { year: -283, kind: '纵', title: '完璧归赵', at: [108.72, 34.35], text: '蔺相如奉璧入秦，倚柱怒发，秦不予城而璧完归。小国之尊严，有时只在一人之胆。' },
+  { year: -279, kind: '纵', title: '渑池之会', at: [111.76, 34.77], text: '秦王令赵王鼓瑟，相如请秦王击缶，以颈血溅之相胁。归而位在廉颇之上，遂有负荆之请。' },
+  { year: -278, kind: '学', title: '屈原沉江', at: [113.07, 28.8], text: '郢既破，作《哀郢》而怀沙自沉于汨罗。「亦余心之所善兮，虽九死其犹未悔。」' },
+  { year: -276, kind: '纵', title: '信陵君封', at: [114.35, 34.79], text: '魏公子无忌仁而下士，食客三千。诸侯以公子贤，十余年不敢加兵谋魏。' },
+  { year: -270, kind: '变', title: '范雎入秦', at: [108.72, 34.35], text: '折胁摺齿而逃于秦，说昭王曰：「秦国之政，闻有太后、穰侯，不闻有王。」' },
+  { year: -268, kind: '纵', title: '远交近攻', at: [108.72, 34.35], text: '得寸则王之寸，得尺亦王之尺。秦之战略自此由掠地转为夺国——所并者不复归还。' },
+  { year: -266, kind: '变', title: '范雎为相，废穰侯', at: [108.72, 34.35], text: '收魏冉之权，逐泾阳、高陵于关外，太后废。秦王之权自此一统于上。' },
+  { year: -262, kind: '纵', title: '上党献赵', at: [112.9, 36.3], text: '韩以上党予秦，守冯亭不肯，转献于赵。平原君曰「发百万之军而攻，逾岁未得一城，今坐受十七城，此大利」——赵遂受之。' },
+  { year: -259, kind: '学', title: '秦王政生于邯郸', at: [114.49, 36.6], text: '子楚为质，吕不韦以为奇货可居。是岁生政，四十年后海内一统。' },
+  { year: -257, kind: '纵', title: '毛遂自荐', at: [114.88, 33.73], text: '平原君之楚请救，门下毛遂请行，按剑历阶而说楚王，一言而定纵约。「三寸之舌，强于百万之师。」' },
+  { year: -256, kind: '并', title: '秦灭西周·楚灭鲁', at: [112.45, 34.68], text: '周赧王卒，九鼎入秦，八百年之宗周绝。孔子之国亦亡于是年——旧秩序的两个象征同岁而尽。' },
+  { year: -256, kind: '工', title: '李冰守蜀·都江堰', at: [104.07, 30.66], text: '凿离堆，分内外江，旱则引水浸润，雨则杜塞水门。「水旱从人，不知饥馑」，蜀遂为天府。' },
+  { year: -251, kind: '战', title: '鄗代之战', at: [114.5, 37.5], text: '燕以栗腹将六十万乘赵新丧而伐之。廉颇以八万破燕于鄗，乐乘破之于代，反围燕都，燕割五城以请和。' },
+  { year: -250, kind: '变', title: '吕不韦为相', at: [108.72, 34.35], text: '庄襄王立，以不韦为丞相，封文信侯，食蓝田十二县。招致士人，著《吕氏春秋》，悬于咸阳市门。' },
+  { year: -249, kind: '并', title: '秦灭东周', at: [113.0, 34.75], text: '吕不韦攻东周君于巩，周祀遂绝。秦置三川郡，兵锋直抵中原。' },
+  { year: -246, kind: '工', title: '郑国渠成', at: [108.9, 34.6], text: '韩以疲秦之计使水工郑国凿渠。事觉，郑国曰「臣为韩延数岁之命，然为秦建万世之功」——渠成而关中为沃野，秦反以富强。' },
+  { year: -243, kind: '纵', title: '信陵君死', at: [114.35, 34.79], text: '秦行反间，魏王使人代将。公子谢病不朝，与宾客为长夜之饮，四岁而卒。魏之亡，自此可期。' },
+  { year: -241, kind: '都', title: '楚徙都寿春', at: [116.78, 32.0], text: '五国伐秦不成，楚畏秦而东迁，去陈就淮南。中原之国，至此皆背秦而走。' },
+  { year: -238, kind: '变', title: '秦王政亲政', at: [107.4, 34.52], text: '平嫪毐之乱，车裂之，夷三族；明年免吕不韦，徙蜀，饮鸩死。宗室外戚之权尽收。' },
+  { year: -237, kind: '变', title: '李斯《谏逐客书》', at: [108.72, 34.35], text: '「太山不让土壤，故能成其大；河海不择细流，故能就其深。」逐客令遂废，客卿复用。' },
+  { year: -236, kind: '变', title: '尉缭之策', at: [108.72, 34.35], text: '「愿大王毋爱财物，赂其豪臣以乱其谋，不过亡三十万金，而诸侯可尽。」谋臣先行，而后甲兵。' },
+  { year: -233, kind: '学', title: '韩非入秦', at: [108.72, 34.35], text: '秦王见《孤愤》《五蠹》曰「嗟乎，寡人得见此人与之游，死不恨矣」。既至，李斯毁之，下狱死于云阳——其书行于秦，其人不容于秦。' },
+  { year: -229, kind: '纵', title: '秦行反间杀李牧', at: [114.49, 36.6], text: '王翦攻赵，秦多与赵王宠臣郭开金，言牧欲反。赵王使赵葱代之，牧不受命，遂捕而杀之——三月后邯郸破。' },
+  { year: -227, kind: '纵', title: '荆轲刺秦王', at: [108.72, 34.35], text: '易水送别，风萧萧兮。图穷而匕首见，绕柱而走，卒不中。秦王大怒，益发兵诣赵，王翦遂北向燕。' },
+  { year: -225, kind: '战', title: '李信伐楚败绩', at: [115.9, 33.4], text: '李信言二十万可取楚，王翦曰非六十万不可。信果为项燕所破，亡七都尉。秦王驰入频阳谢王翦——「将军虽病，独忍弃寡人乎」。' },
+  { year: -222, kind: '并', title: '灭代·定江南', at: [114.0, 39.9], text: '王贲虏代王嘉，代亡；王翦降越君，置会稽郡。天下之大者，唯余齐一国。' },
+  { year: -221, kind: '并', title: '海内为郡县', at: [108.72, 34.35], text: '初并天下，号皇帝。分三十六郡，一法度衡石丈尺，车同轨，书同文字。「自上古以来未尝有，五帝所不及。」' },
+  { year: -221, kind: '工', title: '铸十二金人', at: [108.72, 34.35], text: '收天下兵聚之咸阳，销以为钟鐻、金人十二，各重千石，置廷宫中。徙天下豪富于咸阳十二万户。' },
 ];
 
 const EVENTS = [
@@ -2501,9 +2730,11 @@ class SandTable {
   fit() {
     if (!this.css) return;
     this.cam = null;
+    this.driftAnchor = null;
     const pad = 20;
     const f = this.focus;
-    const s = Math.min((this.css.w - pad * 2) / f.w, (this.css.h - pad * 2) / f.h);
+    // 宽而扁的窗口允许纵向略微裁去一点，否则盘子小、两侧全是空
+    const s = Math.min((this.css.w - pad * 2) / f.w, ((this.css.h - pad * 2) / f.h) * 1.12);
     this.base = s;
     this.view.scale = 1;
     this.view.x = (this.css.w - f.w * s) / 2 - f.x0 * s;
@@ -2542,7 +2773,8 @@ class SandTable {
     REGIONS.forEach((r, i) => { if (next[r.id] !== this.owner[r.id]) moved.push(i); });
     this.prevOwner = animate && moved.length ? this.owner : next;
     this.owner = next;
-    if (animate && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }
+    const still = !this.cam && !this.drifting;
+    if (animate && still && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }
     else { this.morph = 1; this.hasPrev = false; }
     this.year = year;
     this.flash = animate && moved.length ? { idx: moved, start: performance.now() } : null;
@@ -2586,6 +2818,48 @@ class SandTable {
   }
 
   stop() { this.playback = null; }
+
+  // 缓缓移向所讲之处，而非跳过去
+  focusOn(lonlat, scale = 1.5, dur = 2400) {
+    if (!this.css) return;
+    const p = project(lonlat);
+    const s = this.base * scale;
+    const f = this.focus;
+    const halfW = this.css.w / (2 * s);
+    const halfH = this.css.h / (2 * s);
+    const cx = f.w > halfW * 2
+      ? Math.max(f.x0 + halfW, Math.min(f.x1 - halfW, p.x)) : (f.x0 + f.x1) / 2;
+    const cy = f.h > halfH * 2
+      ? Math.max(f.y0 + halfH, Math.min(f.y1 - halfH, p.y)) : (f.y0 + f.y1) / 2;
+    this.cam = {
+      from: { ...this.view },
+      to: { scale, x: this.css.w / 2 - cx * s, y: this.css.h / 2 - cy * s },
+      start: performance.now(),
+      dur,
+    };
+    this.driftAnchor = null;
+    if (this.reduced) { Object.assign(this.view, this.cam.to); this.cam = null; this.dirty = true; }
+  }
+
+  // 放映时镜头始终有极缓的呼吸与横移，静止的画面不像纪录片
+  startDrift() { this.drifting = true; this.driftAnchor = null; }
+
+  stopDrift() { this.drifting = false; this.driftAnchor = null; }
+
+  applyDrift(now) {
+    if (!this.drifting || this.cam || this.reduced || !this.css) return;
+    if (!this.driftAnchor) {
+      const c = this.toWorld(this.css.w / 2, this.css.h / 2);
+      this.driftAnchor = { x: c.x, y: c.y, scale: this.view.scale, t0: now };
+    }
+    const a = this.driftAnchor;
+    const t = (now - a.t0) / 1000;
+    const scale = a.scale * (1 + 0.045 * Math.sin(t / 15 + 1.2));
+    const s = this.base * scale;
+    this.view.scale = scale;
+    this.view.x = this.css.w / 2 - a.x * s + Math.sin(t / 19) * 24;
+    this.view.y = this.css.h / 2 - a.y * s + Math.cos(t / 26) * 16;
+  }
 
   // 推演毕，镜头退回全景，否则接下来的年份都困在战场里
   flyHome() {
@@ -2678,7 +2952,7 @@ class SandTable {
   }
 
   animating() {
-    if (this.morph < 1 || this.cam || this.playback || this.flash) return true;
+    if (this.morph < 1 || this.cam || this.playback || this.flash || this.drifting) return true;
     if (this.reduced || !this.layers.battles) return false;
     if (this.selected) return true;
     return this.battles.some((b) => b.year <= this.year && this.year - b.year <= 6);
@@ -2696,17 +2970,20 @@ class SandTable {
       this.view.scale = from.scale + (to.scale - from.scale) * k;
       this.view.x = from.x + (to.x - from.x) * k;
       this.view.y = from.y + (to.y - from.y) * k;
-      if (k >= 1) this.cam = null;
+      if (k >= 1) { this.cam = null; this.driftAnchor = null; }
     }
+    this.applyDrift(now);
 
     const key = this.boardKey();
     const boardStale = key !== this.boardCacheKey;
     if (!boardStale && !this.dirty && !this.animating()) return;
     this.dirty = false;
 
-    const glide = this.cam && this.board && this.boardView;
-    const held = this.scrubbing && this.board && now - (this.lastBoardAt || 0) < 95;
-    if (boardStale && !glide && !held) {
+    // 视角在缓动时，先缩放缓存那张，按节流重绘，免得逐帧全量重画
+    const throttle = this.scrubbing ? 95 : this.drifting ? 240 : 0;
+    const held = throttle > 0 && this.board && now - (this.lastBoardAt || 0) < throttle;
+    const glide = this.board && this.boardView && (this.cam || (boardStale && held));
+    if (boardStale && !this.cam && !held) {
       this.renderBoard();
       this.boardCacheKey = key;
       this.lastBoardAt = now;
@@ -2742,10 +3019,12 @@ class SandTable {
     if (this.layers.battles) this.drawBattles(ctx, now);
     if (this.playback) this.drawPlayback(ctx, now);
 
-    this.drawPlate(ctx);
-    this.drawCompass(ctx);
+    if (!this.cinema) {
+      this.drawPlate(ctx);
+      this.drawCompass(ctx);
+      if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
+    }
     this.drawScale(ctx);
-    if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
 
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = this.grainPattern || (this.grainPattern = ctx.createPattern(this.grain, 'repeat'));
@@ -3351,8 +3630,9 @@ class SandTable {
     let km = steps[steps.length - 1];
     for (const c of steps) { if (c * pxPerKm >= 70 && c * pxPerKm <= 170) { km = c; break; } }
     const len = km * pxPerKm;
-    const x = 22;
-    const y = this.css.h - 44;
+    // 放映时字幕占着左下角，比例尺让到右边
+    const x = this.cinema ? this.css.w - 26 - len : 22;
+    const y = this.css.h - (this.cinema ? 26 : 44);
     ctx.save();
     ctx.strokeStyle = 'rgba(201,162,39,0.8)';
     ctx.lineWidth = 1.3;
@@ -3690,6 +3970,16 @@ function syncChron() {
 
 /* ── 国力 ─────────────────────────────────────── */
 
+// 各国立国之年：前473 的赵魏韩尚未分晋，不能说「已亡」
+const RISEN = new Map();
+{
+  const owner = { ...BASE };
+  const mark = (y) => { for (const st of new Set(Object.values(owner))) if (!RISEN.has(st)) RISEN.set(st, y); };
+  mark(START);
+  for (const c of CHANGES) { Object.assign(owner, c.set); mark(c.year); }
+  for (const st of SEVEN) if (!RISEN.has(st)) RISEN.set(st, Infinity);
+}
+
 const powerBox = $('power');
 const powerRows = new Map();
 let powerOrder = '';
@@ -3734,9 +4024,13 @@ function syncPower() {
     row.fill.style.width = `${(v / max) * 100}%`;
     row.num.textContent = `${counts.get(id) || 0}郡 · 带甲${Math.round(v * 4.5)}万`;
   }
-  const gone = SEVEN.filter((x) => !power.has(x));
-  if (gone.length) {
-    goneNote.textContent = `${gone.map((x) => STATES[x].name).join('、')} 已亡`;
+  const gone = SEVEN.filter((x) => !power.has(x) && RISEN.get(x) <= year);
+  const unborn = SEVEN.filter((x) => !power.has(x) && !(RISEN.get(x) <= year));
+  const parts = [];
+  if (unborn.length) parts.push(`${unborn.map((x) => STATES[x].name).join('、')} 未立`);
+  if (gone.length) parts.push(`${gone.map((x) => STATES[x].name).join('、')} 已亡`);
+  if (parts.length) {
+    goneNote.textContent = parts.join(' · ');
     powerBox.appendChild(goneNote);
   } else {
     goneNote.remove();
@@ -3899,6 +4193,68 @@ function syncCaption(force = false) {
 
 $('capClose').addEventListener('click', () => { hideCaption(); pause(); });
 
+/* ── 放映 ─────────────────────────────────────── */
+
+const card = $('actCard');
+let cinema = false;
+let cardUntil = 0;
+let cardShown = null;
+
+function toggleCinema() {
+  cinema = !cinema;
+  document.body.classList.toggle('is-cinema', cinema);
+  table.cinema = cinema;
+  table.dirty = true;
+  $('btnCinema').setAttribute('aria-pressed', String(cinema));
+  requestAnimationFrame(() => table.resize());
+  if (cinema) {
+    hideCaption();
+    table.startDrift();
+    syncCine();
+    showCard(actAt(year));
+    if (!playing) start();
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  } else {
+    table.stopDrift();
+    card.hidden = true;
+    cardShown = null;
+    cardUntil = 0;
+    table.fit();
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  }
+}
+
+function showCard(act) {
+  cardShown = act;
+  card.hidden = false;
+  card.classList.remove('is-out');
+  $('cardNo').textContent = act.no;
+  $('cardTitle').textContent = act.title;
+  $('cardSpan').textContent = `${formatYear(act.from)} — ${formatYear(act.to)}`;
+  $('cardThesis').textContent = act.thesis;
+  cardUntil = performance.now() + 4600;
+  if (speech.enabled && speech.ready) {
+    speech.say(`第${act.no}幕，${act.title}。${act.thesis}`, () => {
+      cardUntil = Math.max(cardUntil, performance.now() + 900);
+    });
+  }
+  chime('act');
+}
+
+function syncCine() {
+  if (!cinema) return;
+  const a = actAt(year);
+  $('cineActNo').textContent = a.no;
+  $('cineActTitle').textContent = a.title;
+  $('cineYear').textContent = formatYear(year);
+}
+
+$('btnCinema').addEventListener('click', toggleCinema);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && cinema) toggleCinema();
+});
+
 /* ── 主循环 ───────────────────────────────────── */
 
 function setYear(y, animate = true) {
@@ -3917,6 +4273,7 @@ function setYear(y, animate = true) {
   syncChron();
   syncPower();
   syncActs();
+  syncCine();
   if (detailMode === 'act') showAct();
   const change = CHANGES.find((c) => c.year === year && c.note);
   if (change && animate) showToast(`${formatYear(year)} · ${change.note}`);
@@ -3937,6 +4294,7 @@ function nextLore(now) {
   const e = queue.shift();
   if (!e) return;
   showLore(e);
+  if (cinema && e.at) table.focusOn(e.at, 1.22, 2800);
   if (playing) showAct();
   const base = dwell(e);
   loreUntil = now + base;
@@ -4026,12 +4384,23 @@ $('btnPlay').addEventListener('click', toggle);
 function frame(now) {
   if (march) syncCaption();
   if (playing) {
+    if (cinema) {
+      const a = actAt(year);
+      if (a !== cardShown && !table.playback) { showCard(a); lastTick = now; }
+      if (cardUntil > now) { lastTick = now; table.draw(now); requestAnimationFrame(frame); return; }
+      if (!card.hidden && cardUntil && cardUntil <= now) {
+        card.classList.add('is-out');
+        setTimeout(() => { card.hidden = true; }, 700);
+        cardUntil = 0;
+      }
+    }
     const pb = table.playback;
     if (pb && pb.t < 1) {
       lastTick = now;
     } else if (march) {
-      endMarch();
+      endMarch(!cinema);
       showAct();
+      if (cinema) table.startDrift();
       if (queue.length) nextLore(now + 300);
       lastTick = now + 300;
     } else if (loreUntil > now) {

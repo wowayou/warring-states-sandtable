@@ -1,7 +1,7 @@
 import { SandTable } from './table.js';
 import { speech, chime } from './sound.js';
 import { REGIONS } from './atlas.js';
-import { STATES, SEVEN, EVENTS, BATTLES, CHANGES, ACTS, actAt, START, END, formatYear, ownerAt } from './history.js';
+import { STATES, SEVEN, EVENTS, BATTLES, CHANGES, BASE, ACTS, actAt, START, END, formatYear, ownerAt } from './history.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('table');
@@ -162,6 +162,16 @@ function syncChron() {
 
 /* ── 国力 ─────────────────────────────────────── */
 
+// 各国立国之年：前473 的赵魏韩尚未分晋，不能说「已亡」
+const RISEN = new Map();
+{
+  const owner = { ...BASE };
+  const mark = (y) => { for (const st of new Set(Object.values(owner))) if (!RISEN.has(st)) RISEN.set(st, y); };
+  mark(START);
+  for (const c of CHANGES) { Object.assign(owner, c.set); mark(c.year); }
+  for (const st of SEVEN) if (!RISEN.has(st)) RISEN.set(st, Infinity);
+}
+
 const powerBox = $('power');
 const powerRows = new Map();
 let powerOrder = '';
@@ -206,9 +216,13 @@ function syncPower() {
     row.fill.style.width = `${(v / max) * 100}%`;
     row.num.textContent = `${counts.get(id) || 0}郡 · 带甲${Math.round(v * 4.5)}万`;
   }
-  const gone = SEVEN.filter((x) => !power.has(x));
-  if (gone.length) {
-    goneNote.textContent = `${gone.map((x) => STATES[x].name).join('、')} 已亡`;
+  const gone = SEVEN.filter((x) => !power.has(x) && RISEN.get(x) <= year);
+  const unborn = SEVEN.filter((x) => !power.has(x) && !(RISEN.get(x) <= year));
+  const parts = [];
+  if (unborn.length) parts.push(`${unborn.map((x) => STATES[x].name).join('、')} 未立`);
+  if (gone.length) parts.push(`${gone.map((x) => STATES[x].name).join('、')} 已亡`);
+  if (parts.length) {
+    goneNote.textContent = parts.join(' · ');
     powerBox.appendChild(goneNote);
   } else {
     goneNote.remove();
@@ -371,6 +385,68 @@ function syncCaption(force = false) {
 
 $('capClose').addEventListener('click', () => { hideCaption(); pause(); });
 
+/* ── 放映 ─────────────────────────────────────── */
+
+const card = $('actCard');
+let cinema = false;
+let cardUntil = 0;
+let cardShown = null;
+
+function toggleCinema() {
+  cinema = !cinema;
+  document.body.classList.toggle('is-cinema', cinema);
+  table.cinema = cinema;
+  table.dirty = true;
+  $('btnCinema').setAttribute('aria-pressed', String(cinema));
+  requestAnimationFrame(() => table.resize());
+  if (cinema) {
+    hideCaption();
+    table.startDrift();
+    syncCine();
+    showCard(actAt(year));
+    if (!playing) start();
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  } else {
+    table.stopDrift();
+    card.hidden = true;
+    cardShown = null;
+    cardUntil = 0;
+    table.fit();
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  }
+}
+
+function showCard(act) {
+  cardShown = act;
+  card.hidden = false;
+  card.classList.remove('is-out');
+  $('cardNo').textContent = act.no;
+  $('cardTitle').textContent = act.title;
+  $('cardSpan').textContent = `${formatYear(act.from)} — ${formatYear(act.to)}`;
+  $('cardThesis').textContent = act.thesis;
+  cardUntil = performance.now() + 4600;
+  if (speech.enabled && speech.ready) {
+    speech.say(`第${act.no}幕，${act.title}。${act.thesis}`, () => {
+      cardUntil = Math.max(cardUntil, performance.now() + 900);
+    });
+  }
+  chime('act');
+}
+
+function syncCine() {
+  if (!cinema) return;
+  const a = actAt(year);
+  $('cineActNo').textContent = a.no;
+  $('cineActTitle').textContent = a.title;
+  $('cineYear').textContent = formatYear(year);
+}
+
+$('btnCinema').addEventListener('click', toggleCinema);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && cinema) toggleCinema();
+});
+
 /* ── 主循环 ───────────────────────────────────── */
 
 function setYear(y, animate = true) {
@@ -389,6 +465,7 @@ function setYear(y, animate = true) {
   syncChron();
   syncPower();
   syncActs();
+  syncCine();
   if (detailMode === 'act') showAct();
   const change = CHANGES.find((c) => c.year === year && c.note);
   if (change && animate) showToast(`${formatYear(year)} · ${change.note}`);
@@ -409,6 +486,7 @@ function nextLore(now) {
   const e = queue.shift();
   if (!e) return;
   showLore(e);
+  if (cinema && e.at) table.focusOn(e.at, 1.22, 2800);
   if (playing) showAct();
   const base = dwell(e);
   loreUntil = now + base;
@@ -498,12 +576,23 @@ $('btnPlay').addEventListener('click', toggle);
 function frame(now) {
   if (march) syncCaption();
   if (playing) {
+    if (cinema) {
+      const a = actAt(year);
+      if (a !== cardShown && !table.playback) { showCard(a); lastTick = now; }
+      if (cardUntil > now) { lastTick = now; table.draw(now); requestAnimationFrame(frame); return; }
+      if (!card.hidden && cardUntil && cardUntil <= now) {
+        card.classList.add('is-out');
+        setTimeout(() => { card.hidden = true; }, 700);
+        cardUntil = 0;
+      }
+    }
     const pb = table.playback;
     if (pb && pb.t < 1) {
       lastTick = now;
     } else if (march) {
-      endMarch();
+      endMarch(!cinema);
       showAct();
+      if (cinema) table.startDrift();
       if (queue.length) nextLore(now + 300);
       lastTick = now + 300;
     } else if (loreUntil > now) {

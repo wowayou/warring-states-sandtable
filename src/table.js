@@ -275,9 +275,11 @@ export class SandTable {
   fit() {
     if (!this.css) return;
     this.cam = null;
+    this.driftAnchor = null;
     const pad = 20;
     const f = this.focus;
-    const s = Math.min((this.css.w - pad * 2) / f.w, (this.css.h - pad * 2) / f.h);
+    // 宽而扁的窗口允许纵向略微裁去一点，否则盘子小、两侧全是空
+    const s = Math.min((this.css.w - pad * 2) / f.w, ((this.css.h - pad * 2) / f.h) * 1.12);
     this.base = s;
     this.view.scale = 1;
     this.view.x = (this.css.w - f.w * s) / 2 - f.x0 * s;
@@ -316,7 +318,8 @@ export class SandTable {
     REGIONS.forEach((r, i) => { if (next[r.id] !== this.owner[r.id]) moved.push(i); });
     this.prevOwner = animate && moved.length ? this.owner : next;
     this.owner = next;
-    if (animate && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }
+    const still = !this.cam && !this.drifting;
+    if (animate && still && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }
     else { this.morph = 1; this.hasPrev = false; }
     this.year = year;
     this.flash = animate && moved.length ? { idx: moved, start: performance.now() } : null;
@@ -360,6 +363,48 @@ export class SandTable {
   }
 
   stop() { this.playback = null; }
+
+  // 缓缓移向所讲之处，而非跳过去
+  focusOn(lonlat, scale = 1.5, dur = 2400) {
+    if (!this.css) return;
+    const p = project(lonlat);
+    const s = this.base * scale;
+    const f = this.focus;
+    const halfW = this.css.w / (2 * s);
+    const halfH = this.css.h / (2 * s);
+    const cx = f.w > halfW * 2
+      ? Math.max(f.x0 + halfW, Math.min(f.x1 - halfW, p.x)) : (f.x0 + f.x1) / 2;
+    const cy = f.h > halfH * 2
+      ? Math.max(f.y0 + halfH, Math.min(f.y1 - halfH, p.y)) : (f.y0 + f.y1) / 2;
+    this.cam = {
+      from: { ...this.view },
+      to: { scale, x: this.css.w / 2 - cx * s, y: this.css.h / 2 - cy * s },
+      start: performance.now(),
+      dur,
+    };
+    this.driftAnchor = null;
+    if (this.reduced) { Object.assign(this.view, this.cam.to); this.cam = null; this.dirty = true; }
+  }
+
+  // 放映时镜头始终有极缓的呼吸与横移，静止的画面不像纪录片
+  startDrift() { this.drifting = true; this.driftAnchor = null; }
+
+  stopDrift() { this.drifting = false; this.driftAnchor = null; }
+
+  applyDrift(now) {
+    if (!this.drifting || this.cam || this.reduced || !this.css) return;
+    if (!this.driftAnchor) {
+      const c = this.toWorld(this.css.w / 2, this.css.h / 2);
+      this.driftAnchor = { x: c.x, y: c.y, scale: this.view.scale, t0: now };
+    }
+    const a = this.driftAnchor;
+    const t = (now - a.t0) / 1000;
+    const scale = a.scale * (1 + 0.045 * Math.sin(t / 15 + 1.2));
+    const s = this.base * scale;
+    this.view.scale = scale;
+    this.view.x = this.css.w / 2 - a.x * s + Math.sin(t / 19) * 24;
+    this.view.y = this.css.h / 2 - a.y * s + Math.cos(t / 26) * 16;
+  }
 
   // 推演毕，镜头退回全景，否则接下来的年份都困在战场里
   flyHome() {
@@ -452,7 +497,7 @@ export class SandTable {
   }
 
   animating() {
-    if (this.morph < 1 || this.cam || this.playback || this.flash) return true;
+    if (this.morph < 1 || this.cam || this.playback || this.flash || this.drifting) return true;
     if (this.reduced || !this.layers.battles) return false;
     if (this.selected) return true;
     return this.battles.some((b) => b.year <= this.year && this.year - b.year <= 6);
@@ -470,17 +515,20 @@ export class SandTable {
       this.view.scale = from.scale + (to.scale - from.scale) * k;
       this.view.x = from.x + (to.x - from.x) * k;
       this.view.y = from.y + (to.y - from.y) * k;
-      if (k >= 1) this.cam = null;
+      if (k >= 1) { this.cam = null; this.driftAnchor = null; }
     }
+    this.applyDrift(now);
 
     const key = this.boardKey();
     const boardStale = key !== this.boardCacheKey;
     if (!boardStale && !this.dirty && !this.animating()) return;
     this.dirty = false;
 
-    const glide = this.cam && this.board && this.boardView;
-    const held = this.scrubbing && this.board && now - (this.lastBoardAt || 0) < 95;
-    if (boardStale && !glide && !held) {
+    // 视角在缓动时，先缩放缓存那张，按节流重绘，免得逐帧全量重画
+    const throttle = this.scrubbing ? 95 : this.drifting ? 240 : 0;
+    const held = throttle > 0 && this.board && now - (this.lastBoardAt || 0) < throttle;
+    const glide = this.board && this.boardView && (this.cam || (boardStale && held));
+    if (boardStale && !this.cam && !held) {
       this.renderBoard();
       this.boardCacheKey = key;
       this.lastBoardAt = now;
@@ -516,10 +564,12 @@ export class SandTable {
     if (this.layers.battles) this.drawBattles(ctx, now);
     if (this.playback) this.drawPlayback(ctx, now);
 
-    this.drawPlate(ctx);
-    this.drawCompass(ctx);
+    if (!this.cinema) {
+      this.drawPlate(ctx);
+      this.drawCompass(ctx);
+      if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
+    }
     this.drawScale(ctx);
-    if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
 
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = this.grainPattern || (this.grainPattern = ctx.createPattern(this.grain, 'repeat'));
@@ -1125,8 +1175,9 @@ export class SandTable {
     let km = steps[steps.length - 1];
     for (const c of steps) { if (c * pxPerKm >= 70 && c * pxPerKm <= 170) { km = c; break; } }
     const len = km * pxPerKm;
-    const x = 22;
-    const y = this.css.h - 44;
+    // 放映时字幕占着左下角，比例尺让到右边
+    const x = this.cinema ? this.css.w - 26 - len : 22;
+    const y = this.css.h - (this.cinema ? 26 : 44);
     ctx.save();
     ctx.strokeStyle = 'rgba(201,162,39,0.8)';
     ctx.lineWidth = 1.3;
