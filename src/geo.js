@@ -174,3 +174,102 @@ export function smooth(points, tension = 0.5, steps = 12) {
   out.push(points[points.length - 1]);
   return out;
 }
+
+// —— 让计算出来的边界像画出来的 ——
+// 直接用 Voronoi 的直边，一眼就是算法。沿边加分形扰动即可读作疆界；
+// 扰动量只取决于点的位置与边的规范朝向，故相邻两格共用的那条边不会裂开。
+
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+// 逐行求交填充，比逐点做内外判定快两个数量级
+export function scanlineMask(poly, w, h, b) {
+  const mask = new Uint8Array(w * h);
+  const sx = w / b.w;
+  const sy = h / b.h;
+  const xs = [];
+  for (let gy = 0; gy < h; gy++) {
+    const py = b.y0 + (gy + 0.5) / sy;
+    xs.length = 0;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i];
+      const c = poly[j];
+      if ((a.y > py) !== (c.y > py)) xs.push(a.x + ((py - a.y) * (c.x - a.x)) / (c.y - a.y));
+    }
+    xs.sort((p, q) => p - q);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const from = Math.max(0, Math.ceil((xs[k] - b.x0) * sx - 0.5));
+      const to = Math.min(w - 1, Math.floor((xs[k + 1] - b.x0) * sx - 0.5));
+      for (let gx = from; gx <= to; gx++) mask[gy * w + gx] = 1;
+    }
+  }
+  return mask;
+}
+
+function valueNoise(x, y) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const xf = x - xi;
+  const yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi);
+  const b = hash2(xi + 1, yi);
+  const c = hash2(xi, yi + 1);
+  const d = hash2(xi + 1, yi + 1);
+  return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+}
+
+export function fbm(x, y) {
+  let sum = 0;
+  let amp = 1;
+  let f = 1;
+  for (let i = 0; i < 3; i++) {
+    sum += valueNoise(x * f, y * f) * amp;
+    amp *= 0.5;
+    f *= 2.1;
+  }
+  return sum / 1.75;
+}
+
+// 规范朝向：两端点按 (x,y) 排序，使同一条边无论从哪一格看过去都得到同一串点
+export function warpEdge(a, b, { scale = 0.012, amp = 0.14, max = 18, steps = 6 } = {}) {
+  const flip = a.x > b.x || (a.x === b.x && a.y > b.y);
+  const p = flip ? b : a;
+  const q = flip ? a : b;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return [];
+  const nx = -dy / len;
+  const ny = dx / len;
+  const w = Math.min(len * amp, max);
+  const out = [];
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = p.x + dx * t;
+    const y = p.y + dy * t;
+    const d = fbm(x * scale, y * scale) * w * Math.sin(Math.PI * t);
+    out.push({ x: x + nx * d, y: y + ny * d });
+  }
+  return flip ? out.reverse() : out;
+}
+
+// 把一条闭合或开放折线整体加扰，返回加密后的点串与各原始边所占的区段
+export function warpRing(pts, closed = true, opts) {
+  const ring = [];
+  const spans = [];
+  const n = closed ? pts.length : pts.length - 1;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const start = ring.length;
+    ring.push(a, ...warpEdge(a, b, opts));
+    spans.push({ start, count: ring.length - start + 1 });
+  }
+  if (!closed) ring.push(pts[pts.length - 1]);
+  return { ring, spans };
+}

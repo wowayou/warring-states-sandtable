@@ -2,7 +2,7 @@
 
 import {
   project, projectAll, bounds, voronoi, buildAdjacency,
-  pointInPolygon, smooth, resample,
+  pointInPolygon, smooth, resample, warpRing, fbm, scanlineMask,
 } from './geo.js';
 import { OUTLINE, REGIONS, RIVERS, MOUNTAINS, WALLS, PASSES } from './atlas.js';
 import { STATES, BATTLES, ownerAt, capitalsAt } from './history.js';
@@ -11,12 +11,13 @@ const SERIF = '"Sandtable Serif","Songti SC","STSong","Source Han Serif SC","Not
 const SANS = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif';
 
 const PALETTE = {
-  void: '#080b0c',
-  sea: '#0d1418',
-  seaLine: 'rgba(201,162,39,0.09)',
-  land: '#2c3129',
-  shadow: '#0f120c',
-  light: '#525c47',
+  void: '#06090a',
+  sea: '#06101a',
+  seaDeep: '#030709',
+  seaLine: 'rgba(150,190,210,0.07)',
+  land: '#423d33',     // 中性石色：底子不带绿，列国的颜色才不糊
+  shadow: '#100f08',
+  light: '#867f66',
   bronze: '#c9a227',
   cinnabar: '#c8352b',
   bone: '#e8e2d2',
@@ -24,8 +25,9 @@ const PALETTE = {
 
 const COAST_FROM = 7;   // 鸭绿江口
 const COAST_TO = 36;    // 北部湾
-const GRID = 300;       // 高程场分辨率
-const SAMPLE = 260;     // 陆地采样分辨率
+const GRID = 680;       // 高程场分辨率
+const SAMPLE = 300;     // 陆地采样分辨率
+const RIDGE_WEIGHT = { 阴山: 0.85, 燕山: 0.8, 太行: 1.05, 秦岭: 1.25, 崤函: 0.75, 大别: 0.7, 巫山: 1.0, 泰岱: 0.65, 武夷: 0.75, 岷山: 1.3 };
 const CAM_MS = 900;      // 镜头推移时长
 const KM_PER_UNIT = 1.112; // 一个盘面单位约当的公里数（一度纬距 = 100 单位）
 
@@ -48,14 +50,19 @@ export class SandTable {
   }
 
   build() {
-    this.outline = projectAll(OUTLINE);
+    const raw = projectAll(OUTLINE);
+    // 海岸加细皱：长直段一看就是手画不出来的
+    const shore = warpRing(raw, true, { scale: 0.026, amp: 0.1, max: 11, steps: 5 });
+    this.outline = shore.ring;
     this.bbox = bounds(this.outline);
-    this.coast = this.outline.slice(COAST_FROM, COAST_TO + 1);
-    this.rim = [...this.outline.slice(COAST_TO), ...this.outline.slice(0, COAST_FROM + 1)];
-    this.seaPoly = projectAll([
-      ...OUTLINE.slice(COAST_FROM, COAST_TO + 1),
-      [107.0, 17.0], [135.0, 17.0], [135.0, 45.0], [126.6, 44.4],
-    ]);
+    const at = (i) => shore.spans[i % shore.spans.length].start;
+    this.coast = this.outline.slice(at(COAST_FROM), at(COAST_TO) + 1);
+    this.rim = [...this.outline.slice(at(COAST_TO)), ...this.outline.slice(0, at(COAST_FROM) + 1)];
+    this.focus = bounds(projectAll([[102.0, 42.7], [123.8, 25.4]]));
+    this.seaPoly = [
+      ...this.coast,
+      ...projectAll([[107.0, 17.0], [135.0, 17.0], [135.0, 45.0], [126.6, 44.4]]),
+    ];
 
     this.seeds = REGIONS.map((r) => ({ ...project([r.lon, r.lat]), region: r }));
     const pad = 60;
@@ -67,6 +74,12 @@ export class SandTable {
     ];
     this.cells = voronoi(this.seeds, frame);
     this.adjacency = buildAdjacency(this.cells, this.seeds);
+    // 郡界同样加扰；相邻两格共用的边由规范朝向保证严丝合缝
+    const warped = this.cells.map((c) => (c.length
+      ? warpRing(c, true, { scale: 0.015, amp: 0.15, max: 15, steps: 6 })
+      : { ring: [], spans: [] }));
+    this.shapes = warped.map((w) => w.ring);
+    this.spans = warped.map((w) => w.spans);
     this.index = new Map(REGIONS.map((r, i) => [r.id, i]));
 
     this.rivers = RIVERS.map((r) => ({ ...r, pts: smooth(projectAll(r.path), 0.5, 10), at: project(r.label) }));
@@ -85,6 +98,14 @@ export class SandTable {
     this.buildHatch();
   }
 
+  edgePts(i, j) {
+    const ring = this.shapes[i];
+    const sp = this.spans[i][j];
+    const out = [];
+    for (let k = 0; k < sp.count; k++) out.push(ring[(sp.start + k) % ring.length]);
+    return out;
+  }
+
   // 只有落在海岸线以内的采样点才算疆土——国名与国力都据此计
   sampleLand() {
     const b = this.bbox;
@@ -94,11 +115,12 @@ export class SandTable {
     const acc = REGIONS.map(() => ({ n: 0, x: 0, y: 0 }));
     const stepX = b.w / w;
     const stepY = b.h / h;
+    const mask = scanlineMask(this.outline, w, h, b);
     for (let gy = 0; gy < h; gy++) {
       const py = b.y0 + (gy + 0.5) * stepY;
       for (let gx = 0; gx < w; gx++) {
         const px = b.x0 + (gx + 0.5) * stepX;
-        if (!pointInPolygon(px, py, this.outline)) continue;
+        if (!mask[gy * w + gx]) continue;
         let best = -1;
         let bd = Infinity;
         for (let k = 0; k < this.seeds.length; k++) {
@@ -117,7 +139,8 @@ export class SandTable {
     this.sample = { cellOf, w, h, stepX, stepY, x0: b.x0, y0: b.y0 };
   }
 
-  // 用山脉骨架烙出高程，再作斜光晕渲——沙盘的起伏由此而来
+  // 用山脉骨架烙出高程，再作斜光晕渲——沙盘的起伏由此而来。
+  // 脊线按宽度铺开并取最大值，山才是长条而非团块；再叠细噪声，平原亦有沙痕。
   buildRelief() {
     const b = this.bbox;
     const w = GRID;
@@ -126,37 +149,55 @@ export class SandTable {
     const sx = w / b.w;
     const sy = h / b.h;
 
-    const stamp = (pt, amp) => {
-      const gx = Math.round((pt.x - b.x0) * sx);
-      const gy = Math.round((pt.y - b.y0) * sy);
-      if (gx < 0 || gy < 0 || gx >= w || gy >= h) return;
-      height[gy * w + gx] += amp;
-    };
-    const amps = { 阴山: 1.1, 燕山: 1.0, 太行: 1.4, 秦岭: 1.7, 崤函: 1.1, 大别: 0.9, 巫山: 1.4, 泰岱: 0.9, 武夷: 1.0, 岷山: 1.9 };
-    for (const m of this.mountains) {
-      const dense = resample(m.pts, Math.max(30, m.pts.length * 3));
-      for (const p of dense) stamp(p, amps[m.name] ?? 1);
-    }
-    // 西境高原：自西向东递降，使关中、河洛坐落于阶梯之上
-    for (let gy = 0; gy < h; gy++) {
-      for (let gx = 0; gx < w; gx++) {
-        const t = 1 - gx / w;
-        height[gy * w + gx] += 0.34 * t * t;
+    const ridge = (p, amp, rad) => {
+      const gx = (p.x - b.x0) * sx;
+      const gy = (p.y - b.y0) * sy;
+      const r = Math.ceil(rad);
+      for (let dy = -r; dy <= r; dy++) {
+        const Y = Math.round(gy + dy);
+        if (Y < 0 || Y >= h) continue;
+        for (let dx = -r; dx <= r; dx++) {
+          const X = Math.round(gx + dx);
+          if (X < 0 || X >= w) continue;
+          const d = Math.hypot(dx, dy) / rad;
+          if (d > 1) continue;
+          const f = Math.cos((d * Math.PI) / 2) ** 2;
+          const i = Y * w + X;
+          const v = amp * f;
+          if (v > height[i]) height[i] = v;
+        }
       }
-    }
-    let seed = 20250809;
-    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-    for (let i = 0; i < 1400; i++) {
-      height[Math.floor(rnd() * h) * w + Math.floor(rnd() * w)] += 0.22;
+    };
+
+    for (const m of this.mountains) {
+      const k = RIDGE_WEIGHT[m.name] ?? 1;
+      const dense = resample(m.pts, Math.max(60, m.pts.length * 4));
+      dense.forEach((p, i) => {
+        // 沿脊起伏，免得整条山脉是一根等高的棍子
+        const wave = 0.72 + 0.28 * fbm(i * 0.22, k * 7.3);
+        ridge(p, (0.34 + 0.24 * k) * wave, 6 + 5 * k);
+      });
     }
 
+    blur(height, w, h, 4);
     blur(height, w, h, 2);
-    blur(height, w, h, 5);
-    blur(height, w, h, 9);
+
+    // 细纹：山处粗砺，平地亦有起伏，免得像刷了一片漆
+    for (let gy = 0; gy < h; gy++) {
+      for (let gx = 0; gx < w; gx++) {
+        const i = gy * w + gx;
+        const x = gx / w;
+        const y = gy / h;
+        const rough = 0.35 + 0.9 * Math.min(1, height[i]);
+        height[i] += (fbm(x * 42, y * 42) * 0.085 + fbm(x * 130, y * 130) * 0.035) * rough;
+      }
+    }
+    blur(height, w, h, 1);
 
     let peak = 0;
     for (const v of height) if (v > peak) peak = v;
 
+    const mask = scanlineMask(this.outline, w, h, b);
     const img = new ImageData(w, h);
     const land = hex(PALETTE.land);
     const dark = hex(PALETTE.shadow);
@@ -165,24 +206,22 @@ export class SandTable {
       for (let gx = 0; gx < w; gx++) {
         const i = gy * w + gx;
         const o = i * 4;
-        const px = b.x0 + (gx + 0.5) / sx;
-        const py = b.y0 + (gy + 0.5) / sy;
-        if (!pointInPolygon(px, py, this.outline)) { img.data[o + 3] = 0; continue; }
+        if (!mask[i]) { img.data[o + 3] = 0; continue; }
         const hl = height[clampIdx(gx - 1, w) + gy * w];
         const hr = height[clampIdx(gx + 1, w) + gy * w];
         const hu = height[gx + clampRow(gy - 1, h) * w];
         const hd = height[gx + clampRow(gy + 1, h) * w];
-        const nx = ((hl - hr) / peak) * 46;
-        const ny = ((hu - hd) / peak) * 46;
-        let s = (nx * 0.6 + ny * 0.6 + 1) / 2;
-        s = Math.max(0, Math.min(1, s));
-        const elev = Math.min(1, (height[i] / peak) * 1.3);
+        const nx = ((hl - hr) / peak) * 20;
+        const ny = ((hu - hd) / peak) * 20;
+        let sh = (nx * 0.6 + ny * 0.6 + 1) / 2;
+        sh = Math.max(0, Math.min(1, sh));
+        const elev = Math.min(1, (height[i] / peak) * 1.4);
         const base = [
-          land[0] + (lit[0] - land[0]) * elev * 0.62,
-          land[1] + (lit[1] - land[1]) * elev * 0.62,
-          land[2] + (lit[2] - land[2]) * elev * 0.62,
+          land[0] + (lit[0] - land[0]) * elev * 0.3,
+          land[1] + (lit[1] - land[1]) * elev * 0.3,
+          land[2] + (lit[2] - land[2]) * elev * 0.3,
         ];
-        const k = Math.max(-1, Math.min(1, (s - 0.5) * 2.3));
+        const k = Math.max(-1, Math.min(1, (sh - 0.5) * 1.7));
         for (let c = 0; c < 3; c++) {
           const target = k >= 0 ? lit[c] : dark[c];
           img.data[o + c] = Math.round(base[c] + (target - base[c]) * Math.abs(k));
@@ -198,7 +237,7 @@ export class SandTable {
     const n = 7;
     const c = offscreen(n, n);
     const g = c.getContext('2d');
-    g.strokeStyle = 'rgba(232,226,210,0.13)';
+    g.strokeStyle = 'rgba(232,226,210,0.16)';
     g.lineWidth = 1;
     g.beginPath();
     g.moveTo(-n, n); g.lineTo(n, -n);
@@ -236,12 +275,13 @@ export class SandTable {
   fit() {
     if (!this.css) return;
     this.cam = null;
-    const pad = 22;
-    const s = Math.min((this.css.w - pad * 2) / this.bbox.w, (this.css.h - pad * 2) / this.bbox.h);
+    const pad = 20;
+    const f = this.focus;
+    const s = Math.min((this.css.w - pad * 2) / f.w, (this.css.h - pad * 2) / f.h);
     this.base = s;
     this.view.scale = 1;
-    this.view.x = (this.css.w - this.bbox.w * s) / 2 - this.bbox.x0 * s;
-    this.view.y = (this.css.h - this.bbox.h * s) / 2 - this.bbox.y0 * s;
+    this.view.x = (this.css.w - f.w * s) / 2 - f.x0 * s;
+    this.view.y = (this.css.h - f.h * s) / 2 - f.y0 * s;
   }
 
   toScreen(p) {
@@ -329,8 +369,8 @@ export class SandTable {
       from: { ...this.view },
       to: {
         scale: 1,
-        x: (this.css.w - this.bbox.w * s) / 2 - this.bbox.x0 * s,
-        y: (this.css.h - this.bbox.h * s) / 2 - this.bbox.y0 * s,
+        x: (this.css.w - this.focus.w * s) / 2 - this.focus.x0 * s,
+        y: (this.css.h - this.focus.h * s) / 2 - this.focus.y0 * s,
       },
       start: performance.now(),
       dur: CAM_MS,
@@ -366,6 +406,51 @@ export class SandTable {
     return `${v.x.toFixed(1)},${v.y.toFixed(1)},${v.scale.toFixed(4)},${this.year},${bits},${this.css.w}x${this.css.h}`;
   }
 
+  // 海、投影、起伏只随视角变；拖动铜尺时视角不动，这层不必重算
+  baseKey() {
+    const v = this.view;
+    return `${v.x.toFixed(1)},${v.y.toFixed(1)},${v.scale.toFixed(4)},${this.layers.relief ? 1 : 0},${this.css.w}x${this.css.h}`;
+  }
+
+  renderBase() {
+    if (!this.baseLayer || this.baseLayer.width !== this.canvas.width || this.baseLayer.height !== this.canvas.height) {
+      this.baseLayer = offscreen(this.canvas.width, this.canvas.height);
+      this.baseCtx = this.baseLayer.getContext('2d');
+    }
+    const ctx = this.baseCtx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.baseLayer.width, this.baseLayer.height);
+    ctx.scale(this.dpr, this.dpr);
+    ctx.fillStyle = PALETTE.void;
+    ctx.fillRect(0, 0, this.css.w, this.css.h);
+    this.drawSea(ctx);
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 34;
+    ctx.shadowOffsetX = 9;
+    ctx.shadowOffsetY = 13;
+    this.path(ctx, this.outline);
+    ctx.fillStyle = '#000';
+    ctx.fill();
+    ctx.restore();
+
+    const s = this.base * this.view.scale;
+    const org = this.toScreen({ x: this.bbox.x0, y: this.bbox.y0 });
+    ctx.save();
+    this.path(ctx, this.outline);
+    ctx.clip();
+    if (this.layers.relief) {
+      ctx.drawImage(this.relief, org.x, org.y, this.bbox.w * s, this.bbox.h * s);
+    } else {
+      ctx.fillStyle = PALETTE.land;
+      ctx.fillRect(0, 0, this.css.w, this.css.h);
+    }
+    ctx.restore();
+    ctx.restore();
+  }
+
   animating() {
     if (this.morph < 1 || this.cam || this.playback || this.flash) return true;
     if (this.reduced || !this.layers.battles) return false;
@@ -394,7 +479,7 @@ export class SandTable {
     this.dirty = false;
 
     const glide = this.cam && this.board && this.boardView;
-    const held = this.scrubbing && this.board && now - (this.lastBoardAt || 0) < 70;
+    const held = this.scrubbing && this.board && now - (this.lastBoardAt || 0) < 95;
     if (boardStale && !glide && !held) {
       this.renderBoard();
       this.boardCacheKey = key;
@@ -436,7 +521,7 @@ export class SandTable {
     this.drawScale(ctx);
     if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
 
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.3;
     ctx.fillStyle = this.grainPattern || (this.grainPattern = ctx.createPattern(this.grain, 'repeat'));
     ctx.fillRect(0, 0, this.css.w, this.css.h);
     ctx.globalAlpha = 1;
@@ -448,17 +533,21 @@ export class SandTable {
       this.board = offscreen(this.canvas.width, this.canvas.height);
       this.boardCtx = this.board.getContext('2d');
       this.grainPattern = null;
+      this.baseCacheKey = null;
     }
+    const bKey = this.baseKey();
+    if (bKey !== this.baseCacheKey) {
+      this.renderBase();
+      this.baseCacheKey = bKey;
+    }
+
     this.boardView = { ...this.view };
     const ctx = this.boardCtx;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.board.width, this.board.height);
+    ctx.drawImage(this.baseLayer, 0, 0);
     ctx.scale(this.dpr, this.dpr);
-    ctx.fillStyle = PALETTE.void;
-    ctx.fillRect(0, 0, this.css.w, this.css.h);
-
-    this.drawSea(ctx);
 
     const s = this.base * this.view.scale;
     const org = this.toScreen({ x: this.bbox.x0, y: this.bbox.y0 });
@@ -467,27 +556,25 @@ export class SandTable {
     this.path(ctx, this.outline);
     ctx.clip();
 
-    if (this.layers.relief) {
-      ctx.drawImage(this.relief, org.x, org.y, this.bbox.w * s, this.bbox.h * s);
-    } else {
-      ctx.fillStyle = PALETTE.land;
-      ctx.fillRect(0, 0, this.css.w, this.css.h);
-    }
-
     this.drawTerritory(ctx);
 
     if (this.layers.relief) {
       ctx.globalCompositeOperation = 'overlay';
-      ctx.globalAlpha = 0.62;
+      ctx.globalAlpha = 0.6;
       ctx.drawImage(this.relief, org.x, org.y, this.bbox.w * s, this.bbox.h * s);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     }
+    // 沙盘只塑造诸夏；其外压暗，作盘面之余白
+    if (this.tribePath) {
+      ctx.fillStyle = 'rgba(6,10,12,0.5)';
+      ctx.fill(this.tribePath);
+    }
 
-    this.drawRidges(ctx);
-    if (this.layers.rivers) this.drawRivers(ctx);
     this.drawBorders(ctx);
+    if (this.layers.rivers) this.drawRivers(ctx);
     if (this.layers.walls) this.drawWalls(ctx);
+    this.drawBevel(ctx);
     ctx.restore();
 
     this.drawRim(ctx);
@@ -519,13 +606,24 @@ export class SandTable {
 
   drawSea(ctx) {
     ctx.save();
+    const g = ctx.createLinearGradient(0, 0, 0, this.css.h);
+    g.addColorStop(0, PALETTE.sea);
+    g.addColorStop(1, PALETTE.seaDeep);
     this.path(ctx, this.seaPoly);
-    ctx.fillStyle = PALETTE.sea;
+    ctx.fillStyle = g;
     ctx.fill();
     ctx.clip();
+    // 近岸浅滩：一圈由亮转暗的水痕，陆地才浮得起来
+    for (const [w, a] of [[26, 0.05], [15, 0.06], [7, 0.09]]) {
+      this.path(ctx, this.coast, false);
+      ctx.strokeStyle = `rgba(150,196,214,${a})`;
+      ctx.lineWidth = w;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
     ctx.strokeStyle = PALETTE.seaLine;
     ctx.lineWidth = 1;
-    const step = Math.max(10, 13 * this.view.scale);
+    const step = Math.max(11, 14 * this.view.scale);
     for (let y = -this.css.h; y < this.css.h * 2; y += step) {
       ctx.beginPath();
       ctx.moveTo(-40, y);
@@ -556,12 +654,12 @@ export class SandTable {
     const tribes = new Path2D();
     const hairlines = new Path2D();
     for (let i = 0; i < this.cells.length; i++) {
-      const cell = this.cells[i];
+      const cell = this.shapes[i];
       if (!cell.length) continue;
       this.toPath(cell, true, hairlines);
       if (!this.landArea[i]) continue;
       const st = STATES[this.owner[REGIONS[i].id]];
-      const color = st.tribe ? mix(this.fillFor(i), '#0d110e', 0.46) : this.fillFor(i);
+      const color = st.tribe ? mix(this.fillFor(i), '#0a1013', 0.55) : this.fillFor(i);
       let g = byColor.get(color);
       if (!g) { g = { path: new Path2D(), tribe: st.tribe }; byColor.set(color, g); }
       this.toPath(cell, true, g.path);
@@ -569,13 +667,14 @@ export class SandTable {
     }
     for (const [color, g] of byColor) {
       ctx.fillStyle = color;
-      ctx.globalAlpha = g.tribe ? 0.72 : 0.62;
+      ctx.globalAlpha = g.tribe ? 0.74 : 0.66;
       ctx.fill(g.path);
     }
     ctx.globalAlpha = 1;
     // 化外之地的斜纹改用图案填充，不再逐格裁剪画线
     ctx.fillStyle = this.hatchPattern || (this.hatchPattern = ctx.createPattern(this.hatch, 'repeat'));
     ctx.fill(tribes);
+    this.tribePath = tribes;
     ctx.strokeStyle = 'rgba(9,12,10,0.32)';
     ctx.lineWidth = 0.6;
     ctx.stroke(hairlines);
@@ -592,15 +691,12 @@ export class SandTable {
         const nb = this.adjacency[i][j];
         if (nb < 0 || nb < i) continue;
         if (this.owner[REGIONS[nb].id] === mine) continue;
-        const a = this.toScreen(cell[j]);
-        const b = this.toScreen(cell[(j + 1) % cell.length]);
-        backing.moveTo(a.x, a.y);
-        backing.lineTo(b.x, b.y);
+        const pts = this.edgePts(i, j);
         const ink = (STATES[mine].ink || '#96a096') + 'cc';
         let p = byInk.get(ink);
         if (!p) { p = new Path2D(); byInk.set(ink, p); }
-        p.moveTo(a.x, a.y);
-        p.lineTo(b.x, b.y);
+        this.toPath(pts, false, backing);
+        this.toPath(pts, false, p);
       }
     }
     ctx.save();
@@ -614,6 +710,23 @@ export class SandTable {
       ctx.strokeStyle = ink;
       ctx.stroke(p);
     }
+    ctx.restore();
+  }
+
+  // 岸缘倒角：西北受光、东南落影，一圈之内陆地就抬起来了
+  drawBevel(ctx) {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.translate(2, 2.5);
+    this.path(ctx, this.outline);
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.translate(-4, -5);
+    this.path(ctx, this.outline);
+    ctx.strokeStyle = 'rgba(255,244,214,0.13)';
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -638,36 +751,6 @@ export class SandTable {
     ctx.lineWidth = 1.4;
     ctx.lineJoin = 'round';
     ctx.stroke();
-  }
-
-  drawRidges(ctx) {
-    const lit = new Path2D();
-    const dark = new Path2D();
-    const size = 3.4 + 2.6 * Math.min(2, this.view.scale);
-    for (const m of this.mountains) {
-      const pts = m.pts.map((p) => this.toScreen(p));
-      for (let i = 1; i < pts.length; i += 2) {
-        const a = pts[i - 1];
-        const b = pts[i];
-        const len = Math.hypot(b.x - a.x, b.y - a.y);
-        if (len < 2) continue;
-        const nx = -(b.y - a.y) / len;
-        const ny = (b.x - a.x) / len;
-        lit.moveTo(a.x, a.y);
-        lit.lineTo(a.x + nx * size, a.y + ny * size);
-        dark.moveTo(a.x, a.y);
-        dark.lineTo(a.x - nx * size * 0.85, a.y - ny * size * 0.85);
-      }
-    }
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-    ctx.lineWidth = 1.3;
-    ctx.stroke(dark);
-    ctx.strokeStyle = 'rgba(232,226,205,0.20)';
-    ctx.lineWidth = 1.1;
-    ctx.stroke(lit);
-    ctx.restore();
   }
 
   drawRivers(ctx) {
@@ -803,11 +886,16 @@ export class SandTable {
       const p = this.toScreen(anchor);
       const size = Math.max(15, Math.min(38, Math.sqrt(g.area) * 0.085)) * Math.min(1.6, this.view.scale ** 0.35);
       ctx.font = `700 ${size}px ${SERIF}`;
-      ctx.lineWidth = size * 0.14;
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      if ('letterSpacing' in ctx) ctx.letterSpacing = `${size * 0.1}px`;
+      ctx.lineWidth = size * 0.16;
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
       ctx.strokeText(STATES[st].name, p.x, p.y);
-      ctx.fillStyle = 'rgba(242,238,228,0.92)';
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = size * 0.35;
+      ctx.fillStyle = 'rgba(246,240,224,0.94)';
       ctx.fillText(STATES[st].name, p.x, p.y);
+      ctx.shadowBlur = 0;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
     }
     ctx.restore();
   }
@@ -952,7 +1040,7 @@ export class SandTable {
 
   drawHover(ctx) {
     if (this.hover == null || this.hover < 0) return;
-    const cell = this.cells[this.hover];
+    const cell = this.shapes[this.hover];
     if (!cell || !cell.length) return;
     ctx.save();
     this.path(ctx, cell);
@@ -974,9 +1062,9 @@ export class SandTable {
     ctx.lineWidth = 1;
     ctx.strokeRect(m + 0.5, m + 0.5, w - m * 2 - 1, h - m * 2 - 1);
 
-    ctx.strokeStyle = 'rgba(201,162,39,0.16)';
-    for (let x = m; x < w - m; x += 40) {
-      const major = Math.round((x - m) / 40) % 5 === 0;
+    ctx.strokeStyle = 'rgba(201,162,39,0.11)';
+    for (let x = m; x < w - m; x += 56) {
+      const major = Math.round((x - m) / 56) % 4 === 0;
       ctx.beginPath();
       ctx.moveTo(x + 0.5, m + 1);
       ctx.lineTo(x + 0.5, m + (major ? 8 : 4));
@@ -984,8 +1072,8 @@ export class SandTable {
       ctx.lineTo(x + 0.5, h - m - (major ? 8 : 4));
       ctx.stroke();
     }
-    for (let y = m; y < h - m; y += 40) {
-      const major = Math.round((y - m) / 40) % 5 === 0;
+    for (let y = m; y < h - m; y += 56) {
+      const major = Math.round((y - m) / 56) % 4 === 0;
       ctx.beginPath();
       ctx.moveTo(m + 1, y + 0.5);
       ctx.lineTo(m + (major ? 8 : 4), y + 0.5);
@@ -1065,9 +1153,9 @@ export class SandTable {
     const w = 106;
     const h = 20 + rows.length * 17;
     ctx.save();
-    ctx.fillStyle = 'rgba(8,11,12,0.74)';
+    ctx.fillStyle = 'rgba(7,10,11,0.68)';
     ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = 'rgba(201,162,39,0.24)';
+    ctx.strokeStyle = 'rgba(201,162,39,0.16)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     ctx.fillStyle = 'rgba(201,162,39,0.75)';
