@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>戰國沙盤 · 先秦形勢演變</title>
+<meta name="description" content="前475—前221，二百五十四年列国形势与战事的青铜沙盘推演。" />
+<link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+<div class="frame">
+
+  <header class="rail">
+    <div class="rail-title">
+      <h1>戰國沙盤</h1>
+      <p class="rail-act"><span class="rail-act-no" id="actNo">一</span><span id="actTitle">晋亡而战国立</span></p>
+    </div>
+    <div class="rail-year">
+      <span class="rail-year-num" id="yearBig">前475</span>
+      <span class="rail-year-tag" id="yearTag">周元王元年</span>
+    </div>
+    <nav class="rail-layers" aria-label="图层">
+      <button class="chip is-on" data-layer="relief">山川起伏</button>
+      <button class="chip is-on" data-layer="rivers">水系</button>
+      <button class="chip is-on" data-layer="walls">长城</button>
+      <button class="chip is-on" data-layer="passes">关塞</button>
+      <button class="chip is-on" data-layer="battles">战事</button>
+      <button class="chip is-on" data-layer="labels">国名</button>
+    </nav>
+  </header>
+
+  <main class="board">
+    <aside class="panel panel-left">
+      <div class="panel-head"><span>大事記</span></div>
+      <ol class="chron" id="chron" tabindex="0" aria-label="大事记"></ol>
+    </aside>
+
+    <section class="stage">
+      <canvas id="table" aria-label="战国形势沙盘"></canvas>
+      <div class="toast" id="toast" hidden></div>
+      <div class="caption" id="caption" hidden>
+        <div class="caption-head">
+          <span class="caption-name" id="capName"></span>
+          <span class="caption-year" id="capYear"></span>
+          <button class="caption-close" id="capClose" aria-label="退出推演">收</button>
+        </div>
+        <p class="caption-line"><span class="caption-no" id="capNo">一</span><span id="capText"></span></p>
+        <div class="caption-dots" id="capDots"></div>
+      </div>
+      <div class="stage-hint" id="hint">滚轮缩放 · 拖动移图 · 点朱砂十字看战事</div>
+      <div class="stage-tools">
+        <button class="tool" id="btnFit" title="复位">复位</button>
+        <button class="tool" id="btnZoomIn" title="放大">＋</button>
+        <button class="tool" id="btnZoomOut" title="缩小">－</button>
+      </div>
+      <div class="tip" id="tip" hidden></div>
+    </section>
+
+    <aside class="panel panel-right">
+      <div class="panel-head"><span>國力</span></div>
+      <div class="power" id="power"></div>
+      <div class="panel-head panel-head-mid"><span>案上</span></div>
+      <div class="detail" id="detail"></div>
+    </aside>
+  </main>
+
+  <footer class="ruler-wrap">
+    <button class="play" id="btnPlay" aria-label="自动推演纪年">
+      <span class="play-icon" id="playIcon">▶</span><span class="play-text" id="playText">推演</span>
+    </button>
+    <div class="ruler" id="ruler" role="slider" tabindex="0"
+         aria-label="纪年" aria-valuemin="-475" aria-valuemax="-221" aria-valuenow="-475" aria-valuetext="前475年">
+      <div class="ruler-acts" id="acts"></div>
+      <div class="ruler-ticks" id="ticks"></div>
+      <div class="ruler-marks" id="marks"></div>
+      <div class="ruler-cursor" id="cursor"><span class="ruler-cursor-year" id="cursorYear">前475</span></div>
+    </div>
+    <p class="disclaimer">疆域依主流复原图概貌化，以事件为界分段切换，非逐年精确</p>
+  </footer>
+
+</div>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
