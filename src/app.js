@@ -1,4 +1,5 @@
 import { SandTable } from './table.js';
+import { speech, chime } from './sound.js';
 import { REGIONS } from './atlas.js';
 import { STATES, SEVEN, EVENTS, BATTLES, CHANGES, ACTS, actAt, START, END, formatYear, ownerAt } from './history.js';
 
@@ -94,14 +95,16 @@ let scrubbing = false;
 ruler.addEventListener('pointerdown', (e) => {
   if (e.target.closest('.act')) return;
   scrubbing = true;
+  table.scrubbing = true;
   hideCaption();
   if (detailMode !== 'act') showAct();
   ruler.setPointerCapture(e.pointerId);
-  setYear(yearFromEvent(e));
+  setYear(yearFromEvent(e), false);
   pause();
 });
-ruler.addEventListener('pointermove', (e) => { if (scrubbing) setYear(yearFromEvent(e)); });
-ruler.addEventListener('pointerup', () => { scrubbing = false; syncChron(); });
+// 拖动时不做过渡动画：每换一年都跑一遍二十帧的渐变，正是拖不动的原因
+ruler.addEventListener('pointermove', (e) => { if (scrubbing) setYear(yearFromEvent(e), false); });
+ruler.addEventListener('pointerup', () => { scrubbing = false; table.scrubbing = false; table.dirty = true; syncChron(); });
 ruler.addEventListener('keydown', (e) => {
   const step = e.shiftKey ? 10 : 1;
   if (detailMode !== 'act' && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) { hideCaption(); showAct(); }
@@ -136,6 +139,8 @@ $('chron').addEventListener('click', (e) => {
   else { setYear(+li.dataset.year); showEvent(EVENTS[+li.dataset.i]); }
 });
 
+let chronAnchor = null;
+
 function syncChron() {
   const items = $('chron').children;
   let anchor = null;
@@ -146,33 +151,68 @@ function syncChron() {
     li.classList.toggle('is-now', now);
     if (y <= year) anchor = li;
   }
-  if (anchor && !scrubbing) {
+  // 逐年重启平滑滚动会互相打断，只在当前条目真的换了才滚
+  if (anchor && anchor !== chronAnchor && !scrubbing) {
+    chronAnchor = anchor;
     const box = $('chron');
     const top = anchor.offsetTop - box.clientHeight * 0.42;
-    box.scrollTo({ top, behavior: 'smooth' });
+    box.scrollTo({ top, behavior: playing ? 'smooth' : 'auto' });
   }
 }
 
 /* ── 国力 ─────────────────────────────────────── */
+
+const powerBox = $('power');
+const powerRows = new Map();
+let powerOrder = '';
+
+function powerRow(id) {
+  let row = powerRows.get(id);
+  if (row) return row;
+  const st = STATES[id];
+  const el = document.createElement('div');
+  el.className = 'pw';
+  el.innerHTML = `<span class="pw-name" style="color:${st.ink || st.color}">${st.name}</span>`
+    + `<span class="pw-bar"><i class="pw-fill" style="background-color:${st.color}"></i></span>`
+    + '<span class="pw-num"></span>';
+  row = { el, fill: el.querySelector('.pw-fill'), num: el.querySelector('.pw-num') };
+  powerRows.set(id, row);
+  return row;
+}
+
+const goneNote = document.createElement('p');
+goneNote.className = 'dt-empty';
+goneNote.style.marginTop = '6px';
 
 function syncPower() {
   const power = table.power();
   const owner = ownerAt(year);
   const counts = new Map();
   for (const r of REGIONS) counts.set(owner[r.id], (counts.get(owner[r.id]) || 0) + 1);
-  const rows = [...power.entries()].sort((a, b) => b[1] - a[1]);
+  const rows = [...power.entries()].sort((a, b) => b[1] - a[1])
+    .filter(([id, v]) => SEVEN.includes(id) || v >= 1.4);
   const max = rows.length ? rows[0][1] : 1;
-  const shown = rows.filter(([id, v]) => SEVEN.includes(id) || v >= 1.4);
-  $('power').innerHTML = shown.map(([id, v]) => {
-    const st = STATES[id];
-    return `<div class="pw">
-      <span class="pw-name" style="color:${st.ink || st.color}">${st.name}</span>
-      <span class="pw-bar"><i class="pw-fill" style="width:${(v / max) * 100}%;background-color:${st.color}"></i></span>
-      <span class="pw-num">${counts.get(id) || 0}郡 · 带甲${Math.round(v * 4.5)}万</span>
-    </div>`;
-  }).join('') + (shown.length < 7
-    ? `<p class="dt-empty" style="margin-top:6px">${SEVEN.filter((s) => !power.has(s)).map((s) => STATES[s].name).join('、')} 已亡</p>`
-    : '');
+
+  const order = rows.map(([id]) => id).join(',');
+  if (order !== powerOrder) {
+    powerOrder = order;
+    for (const [id] of rows) powerBox.appendChild(powerRow(id).el);
+    for (const [id, row] of powerRows) {
+      if (!rows.some(([x]) => x === id)) row.el.remove();
+    }
+  }
+  for (const [id, v] of rows) {
+    const row = powerRow(id);
+    row.fill.style.width = `${(v / max) * 100}%`;
+    row.num.textContent = `${counts.get(id) || 0}郡 · 带甲${Math.round(v * 4.5)}万`;
+  }
+  const gone = SEVEN.filter((x) => !power.has(x));
+  if (gone.length) {
+    goneNote.textContent = `${gone.map((x) => STATES[x].name).join('、')} 已亡`;
+    powerBox.appendChild(goneNote);
+  } else {
+    goneNote.remove();
+  }
 }
 
 /* ── 案上 ─────────────────────────────────────── */
@@ -265,8 +305,10 @@ const cap = $('caption');
 const SEALS = { 战: '#c8352b', 变: '#8fae4e', 纵: '#4a9db4', 并: '#c9a227', 都: '#9b66ad', 学: '#b98cc4', 工: '#a8845c' };
 
 function startMarch(b) {
-  march = { battle: b, step: -1 };
-  table.play(b);
+  march = { battle: b, step: -1, struck: false };
+  const talk = speech.enabled && speech.ready;
+  const avg = b.steps.reduce((n, t) => n + t.length, 0) / b.steps.length;
+  table.play(b, talk ? Math.max(1600, avg * 190) : 1250);
   document.body.classList.add('is-marching');
   cap.hidden = false;
   cap.classList.remove('is-lore');
@@ -279,9 +321,11 @@ function startMarch(b) {
 function endMarch(home = true) {
   if (!march) return;
   march = null;
+  speech.hush();
   table.stop();
   if (home) table.flyHome();
   table.selected = null;
+  table.dirty = true;
   document.body.classList.remove('is-marching');
   cap.hidden = true;
 }
@@ -302,6 +346,7 @@ function showLore(e) {
 
 function hideCaption() {
   endMarch();
+  speech.hush();
   cap.hidden = true;
   queue = [];
   loreUntil = 0;
@@ -315,6 +360,8 @@ function syncCaption(force = false) {
   if (!force && step === march.step) return;
   march.step = step;
   const line = march.battle.steps[step] || march.battle.steps[march.battle.steps.length - 1];
+  speech.say(line);
+  if (step >= march.battle.steps.length - 1 && !march.struck) { march.struck = true; chime('war'); }
   $('capNo').textContent = NUMERALS[step] || NUMERALS[march.battle.steps.length - 1];
   $('capText').textContent = line;
   const dots = $('capDots').children;
@@ -363,7 +410,13 @@ function nextLore(now) {
   if (!e) return;
   showLore(e);
   if (playing) showAct();
-  loreUntil = now + dwell(e);
+  const base = dwell(e);
+  loreUntil = now + base;
+  if (speech.enabled && speech.ready) {
+    // 念完再走；万一语音没回调，也有上限兜底
+    loreUntil = now + base * 3;
+    speech.say(`${e.title}。${e.text}`, () => { loreUntil = performance.now() + 500; });
+  }
 }
 
 let toastTimer = 0;
@@ -391,6 +444,7 @@ function start() {
 
 function pause() {
   playing = false;
+  speech.hush();
   $('playIcon').textContent = '▶';
   $('playText').textContent = '推演';
 }
@@ -405,8 +459,33 @@ function dwell(x) {
   if (typeof x === 'object') {
     return Math.min(5600, 1500 + (x.title.length + x.text.length) * 62) * speed;
   }
-  return NOTABLE.has(x) ? 1250 * speed : 55;
+  return NOTABLE.has(x) ? 1250 * speed : 110;
 }
+
+/* ── 声 ─────────────────────────────────────── */
+
+const btnSound = $('btnSound');
+let soundReady = speech.probe();
+
+function refreshSoundBtn() {
+  soundReady = speech.ready;
+  btnSound.disabled = !soundReady;
+  btnSound.title = soundReady
+    ? '朗读解说，战事落定敲一记编钟'
+    : '此浏览器未提供中文语音，无法朗读';
+}
+refreshSoundBtn();
+if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', refreshSoundBtn);
+
+btnSound.addEventListener('click', () => {
+  speech.enabled = !speech.enabled;
+  btnSound.setAttribute('aria-pressed', String(speech.enabled));
+  if (!speech.enabled) speech.hush();
+  else speech.say('戰國沙盤');
+});
+
+document.addEventListener('visibilitychange', () => { if (document.hidden) speech.hush(); });
+window.addEventListener('pagehide', () => speech.hush());
 
 $('btnSpeed').addEventListener('click', () => {
   speed = speed === 1 ? 0.5 : 1;
@@ -446,6 +525,14 @@ function frame(now) {
 
 const tip = $('tip');
 let dragging = null;
+
+function placeTip(px, py) {
+  const w = tip.offsetWidth + 18;
+  const flip = px + w > stage.clientWidth;
+  tip.classList.toggle('is-left', flip);
+  tip.style.left = `${px}px`;
+  tip.style.top = `${Math.max(16, Math.min(stage.clientHeight - 16, py))}px`;
+}
 const touches = new Map();
 let pinch = null;
 
@@ -484,24 +571,24 @@ canvas.addEventListener('pointermove', (e) => {
   }
   const b = table.battleAt(px, py);
   if (b) {
+    if (table.hover !== null) table.dirty = true;
     table.hover = null;
     canvas.style.cursor = 'pointer';
     tip.hidden = false;
     tip.innerHTML = `<b>${b.name}</b> <span>${formatYear(b.year)}</span>`;
-    tip.style.left = `${px}px`;
-    tip.style.top = `${py}px`;
+    placeTip(px, py);
     return;
   }
   canvas.style.cursor = '';
   const i = table.regionAt(px, py);
+  if (i !== table.hover) table.dirty = true;
   table.hover = i;
   if (i < 0) { tip.hidden = true; return; }
   const rg = REGIONS[i];
   const st = STATES[table.owner[rg.id]];
   tip.hidden = false;
   tip.innerHTML = `<b>${rg.name}</b> <span style="color:${st.ink || st.color}">${st.name}</span>`;
-  tip.style.left = `${px}px`;
-  tip.style.top = `${py}px`;
+  placeTip(px, py);
   $('hint').classList.add('is-hidden');
 });
 
@@ -518,16 +605,21 @@ canvas.addEventListener('pointerup', (e) => {
   const b = table.battleAt(px, py);
   if (b) { pause(); selectBattle(b.id, true); return; }
   const i = table.regionAt(px, py);
-  if (i >= 0) { hideCaption(); showRegion(i); }
+  if (i >= 0) { pause(); hideCaption(); showRegion(i); }
 });
 
 canvas.addEventListener('pointercancel', (e) => { touches.delete(e.pointerId); pinch = null; dragging = null; });
-canvas.addEventListener('pointerleave', () => { table.hover = null; tip.hidden = true; });
+canvas.addEventListener('pointerleave', () => { table.hover = null; table.dirty = true; tip.hidden = true; });
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const r = canvas.getBoundingClientRect();
-  table.zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+  // 触控板一次轻扫连发数十个 wheel，故按位移大小取指数并夹住单次幅度
+  let d = e.deltaY;
+  if (e.deltaMode === 1) d *= 16;
+  else if (e.deltaMode === 2) d *= 400;
+  d = Math.max(-64, Math.min(64, d));
+  table.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-d * 0.0018));
   $('hint').classList.add('is-hidden');
 }, { passive: false });
 
@@ -539,6 +631,7 @@ for (const chip of document.querySelectorAll('.chip')) {
   chip.addEventListener('click', () => {
     const key = chip.dataset.layer;
     table.layers[key] = !table.layers[key];
+    table.dirty = true;
     chip.classList.toggle('is-on', table.layers[key]);
     chip.setAttribute('aria-pressed', String(table.layers[key]));
   });

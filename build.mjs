@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 const root = new URL('./', import.meta.url);
 const read = (p) => readFile(new URL(p, root), 'utf8');
 
-const ORDER = ['src/geo.js', 'src/atlas.js', 'src/history.js', 'src/table.js', 'src/app.js'];
+const ORDER = ['src/geo.js', 'src/atlas.js', 'src/history.js', 'src/sound.js', 'src/table.js', 'src/app.js'];
 
 function strip(code) {
   return code

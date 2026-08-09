@@ -26,6 +26,7 @@ const COAST_FROM = 7;   // 鸭绿江口
 const COAST_TO = 36;    // 北部湾
 const GRID = 300;       // 高程场分辨率
 const SAMPLE = 260;     // 陆地采样分辨率
+const CAM_MS = 900;      // 镜头推移时长
 const KM_PER_UNIT = 1.112; // 一个盘面单位约当的公里数（一度纬距 = 100 单位）
 
 export class SandTable {
@@ -41,6 +42,8 @@ export class SandTable {
     this.hover = null;
     this.selected = null;
     this.view = { scale: 1, x: 0, y: 0 };
+    this.dirty = true;
+    this.reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.build();
   }
 
@@ -79,6 +82,7 @@ export class SandTable {
     this.sampleLand();
     this.buildRelief();
     this.buildGrain();
+    this.buildHatch();
   }
 
   // 只有落在海岸线以内的采样点才算疆土——国名与国力都据此计
@@ -190,6 +194,19 @@ export class SandTable {
     this.relief.getContext('2d').putImageData(img, 0, 0);
   }
 
+  buildHatch() {
+    const n = 7;
+    const c = offscreen(n, n);
+    const g = c.getContext('2d');
+    g.strokeStyle = 'rgba(232,226,210,0.13)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(-n, n); g.lineTo(n, -n);
+    g.moveTo(0, n * 2); g.lineTo(n * 2, 0);
+    g.stroke();
+    this.hatch = c;
+  }
+
   buildGrain() {
     const n = 160;
     const c = offscreen(n, n);
@@ -259,7 +276,8 @@ export class SandTable {
     REGIONS.forEach((r, i) => { if (next[r.id] !== this.owner[r.id]) moved.push(i); });
     this.prevOwner = animate && moved.length ? this.owner : next;
     this.owner = next;
-    this.morph = animate && moved.length ? 0 : 1;
+    if (animate && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }
+    else { this.morph = 1; this.hasPrev = false; }
     this.year = year;
     this.flash = animate && moved.length ? { idx: moved, start: performance.now() } : null;
     return moved;
@@ -289,14 +307,16 @@ export class SandTable {
     return best;
   }
 
-  play(battle) {
+  play(battle, per = 1250) {
     const n = battle.marchers.length;
-    this.playback = {
-      battle, t: 0, step: 0, start: performance.now(),
-      per: 1250, tail: 1900, total: n * 1250 + 1900,
-    };
     const pts = [battle.at, ...battle.marchers.flatMap((m) => m.pts)];
     this.flyTo(boundsOf(pts));
+    // 等镜头落定再起兵，否则画面一边推近一边画箭头，看着晕
+    const wait = this.cam ? CAM_MS + 120 : 0;
+    this.playback = {
+      battle, t: 0, step: 0, start: performance.now() + wait,
+      per, tail: 1900, total: n * per + 1900,
+    };
   }
 
   stop() { this.playback = null; }
@@ -313,16 +333,17 @@ export class SandTable {
         y: (this.css.h - this.bbox.h * s) / 2 - this.bbox.y0 * s,
       },
       start: performance.now(),
-      dur: 750,
+      dur: CAM_MS,
     };
+    if (this.reduced) { Object.assign(this.view, this.cam.to); this.cam = null; this.dirty = true; }
   }
 
   // 推演时把镜头压到战场上，否则行军只是几根短线
   flyTo(box, now = performance.now()) {
     const w = Math.max(box.x1 - box.x0, 1);
     const h = Math.max(box.y1 - box.y0, 1);
-    const want = Math.min((this.css.w * 0.5) / w, (this.css.h * 0.54) / h) / this.base;
-    const scale = Math.max(1.1, Math.min(5, want));
+    const want = Math.min((this.css.w * 0.46) / w, (this.css.h * 0.5) / h) / this.base;
+    const scale = Math.max(1.15, Math.min(3.2, want));
     const s = this.base * scale;
     this.cam = {
       from: { ...this.view },
@@ -332,14 +353,32 @@ export class SandTable {
         y: this.css.h * 0.43 - ((box.y0 + box.y1) / 2) * s,
       },
       start: now,
-      dur: 700,
+      dur: CAM_MS,
     };
+    if (this.reduced) { Object.assign(this.view, this.cam.to); this.cam = null; this.dirty = true; }
+  }
+
+  // 盘面本身只在「视角、年份、图层」变了才重绘，缓存下来；
+  // 每帧只重画会动的那几层。此前逐帧全量重绘，是卡顿的根子。
+  boardKey() {
+    const v = this.view;
+    const bits = Object.values(this.layers).map((b) => (b ? 1 : 0)).join('');
+    return `${v.x.toFixed(1)},${v.y.toFixed(1)},${v.scale.toFixed(4)},${this.year},${bits},${this.css.w}x${this.css.h}`;
+  }
+
+  animating() {
+    if (this.morph < 1 || this.cam || this.playback || this.flash) return true;
+    if (this.reduced || !this.layers.battles) return false;
+    if (this.selected) return true;
+    return this.battles.some((b) => b.year <= this.year && this.year - b.year <= 6);
   }
 
   draw(now) {
-    const ctx = this.ctx;
     if (!this.css) return;
-    if (this.morph < 1) this.morph = Math.min(1, this.morph + 0.05);
+    if (this.morph < 1) {
+      this.morph = Math.min(1, this.morph + 0.05);
+      if (this.morph >= 1) this.hasPrev = false;
+    }
     if (this.cam) {
       const k = ease(Math.min(1, (now - this.cam.start) / this.cam.dur));
       const { from, to } = this.cam;
@@ -348,9 +387,74 @@ export class SandTable {
       this.view.y = from.y + (to.y - from.y) * k;
       if (k >= 1) this.cam = null;
     }
+
+    const key = this.boardKey();
+    const boardStale = key !== this.boardCacheKey;
+    if (!boardStale && !this.dirty && !this.animating()) return;
+    this.dirty = false;
+
+    const glide = this.cam && this.board && this.boardView;
+    const held = this.scrubbing && this.board && now - (this.lastBoardAt || 0) < 70;
+    if (boardStale && !glide && !held) {
+      this.renderBoard();
+      this.boardCacheKey = key;
+      this.lastBoardAt = now;
+    }
+
+    const ctx = this.ctx;
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
     ctx.clearRect(0, 0, this.css.w, this.css.h);
+    if (glide) {
+      const k = this.view.scale / this.boardView.scale;
+      ctx.save();
+      ctx.translate(this.view.x - this.boardView.x * k, this.view.y - this.boardView.y * k);
+      ctx.scale(k, k);
+      ctx.drawImage(this.board, 0, 0, this.css.w, this.css.h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(this.board, 0, 0, this.css.w, this.css.h);
+      if (this.morph < 1 && this.hasPrev) {
+        ctx.globalAlpha = 1 - ease(this.morph);
+        ctx.drawImage(this.boardPrev, 0, 0, this.css.w, this.css.h);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    ctx.save();
+    this.path(ctx, this.outline);
+    ctx.clip();
+    this.drawFlash(ctx, now);
+    this.drawHover(ctx);
+    ctx.restore();
+
+    if (this.layers.battles) this.drawBattles(ctx, now);
+    if (this.playback) this.drawPlayback(ctx, now);
+
+    this.drawPlate(ctx);
+    this.drawCompass(ctx);
+    this.drawScale(ctx);
+    if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
+
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = this.grainPattern || (this.grainPattern = ctx.createPattern(this.grain, 'repeat'));
+    ctx.fillRect(0, 0, this.css.w, this.css.h);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  renderBoard() {
+    if (!this.board || this.board.width !== this.canvas.width || this.board.height !== this.canvas.height) {
+      this.board = offscreen(this.canvas.width, this.canvas.height);
+      this.boardCtx = this.board.getContext('2d');
+      this.grainPattern = null;
+    }
+    this.boardView = { ...this.view };
+    const ctx = this.boardCtx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.board.width, this.board.height);
+    ctx.scale(this.dpr, this.dpr);
     ctx.fillStyle = PALETTE.void;
     ctx.fillRect(0, 0, this.css.w, this.css.h);
 
@@ -383,9 +487,7 @@ export class SandTable {
     this.drawRidges(ctx);
     if (this.layers.rivers) this.drawRivers(ctx);
     this.drawBorders(ctx);
-    this.drawFlash(ctx, now);
     if (this.layers.walls) this.drawWalls(ctx);
-    this.drawHover(ctx);
     ctx.restore();
 
     this.drawRim(ctx);
@@ -393,19 +495,17 @@ export class SandTable {
     if (this.layers.passes) this.drawPasses(ctx);
     this.drawCapitals(ctx);
     if (this.layers.labels) this.drawNames(ctx);
-    if (this.layers.battles) this.drawBattles(ctx, now);
-    if (this.playback) this.drawPlayback(ctx, now);
-
-    this.drawPlate(ctx);
-    this.drawCompass(ctx);
-    this.drawScale(ctx);
-    if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
-
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = ctx.createPattern(this.grain, 'repeat');
-    ctx.fillRect(0, 0, this.css.w, this.css.h);
-    ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  toPath(pts, close = true, into = null) {
+    const p = into || new Path2D();
+    for (let i = 0; i < pts.length; i++) {
+      const q = this.toScreen(pts[i]);
+      if (i === 0) p.moveTo(q.x, q.y); else p.lineTo(q.x, q.y);
+    }
+    if (close) p.closePath();
+    return p;
   }
 
   path(ctx, pts, close = true) {
@@ -436,51 +536,54 @@ export class SandTable {
   }
 
   fillFor(i) {
-    const id = REGIONS[i].id;
-    const now = STATES[this.owner[id]];
-    const was = STATES[this.prevOwner[id]] || now;
-    if (this.morph >= 1 || now === was) return now.color;
-    return mix(was.color, now.color, ease(this.morph));
+    return STATES[this.owner[REGIONS[i].id]].color;
+  }
+
+  snapshotBoard() {
+    if (!this.board) return false;
+    if (!this.boardPrev || this.boardPrev.width !== this.board.width || this.boardPrev.height !== this.board.height) {
+      this.boardPrev = offscreen(this.board.width, this.board.height);
+      this.boardPrevCtx = this.boardPrev.getContext('2d');
+    }
+    this.boardPrevCtx.setTransform(1, 0, 0, 1, 0, 0);
+    this.boardPrevCtx.clearRect(0, 0, this.boardPrev.width, this.boardPrev.height);
+    this.boardPrevCtx.drawImage(this.board, 0, 0);
+    return true;
   }
 
   drawTerritory(ctx) {
+    const byColor = new Map();
+    const tribes = new Path2D();
+    const hairlines = new Path2D();
     for (let i = 0; i < this.cells.length; i++) {
-      if (!this.cells[i].length || !this.landArea[i]) continue;
+      const cell = this.cells[i];
+      if (!cell.length) continue;
+      this.toPath(cell, true, hairlines);
+      if (!this.landArea[i]) continue;
       const st = STATES[this.owner[REGIONS[i].id]];
-      this.path(ctx, this.cells[i]);
-      // 化外之地压暗后退，列国之土才浮得起来
-      ctx.fillStyle = st.tribe ? mix(this.fillFor(i), '#0a0d0b', 0.62) : this.fillFor(i);
-      ctx.globalAlpha = st.tribe ? 0.78 : 0.62;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      if (st.tribe) {
-        ctx.save();
-        ctx.clip();
-        ctx.strokeStyle = 'rgba(232,226,210,0.075)';
-        ctx.lineWidth = 1;
-        const bb = boundsOf(this.cells[i].map((p) => this.toScreen(p)));
-        for (let x = bb.x0 - bb.h; x < bb.x1 + bb.h; x += 8) {
-          ctx.beginPath();
-          ctx.moveTo(x, bb.y0);
-          ctx.lineTo(x + bb.h, bb.y1);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
+      const color = st.tribe ? mix(this.fillFor(i), '#0d110e', 0.46) : this.fillFor(i);
+      let g = byColor.get(color);
+      if (!g) { g = { path: new Path2D(), tribe: st.tribe }; byColor.set(color, g); }
+      this.toPath(cell, true, g.path);
+      if (st.tribe) this.toPath(cell, true, tribes);
     }
+    for (const [color, g] of byColor) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = g.tribe ? 0.72 : 0.62;
+      ctx.fill(g.path);
+    }
+    ctx.globalAlpha = 1;
+    // 化外之地的斜纹改用图案填充，不再逐格裁剪画线
+    ctx.fillStyle = this.hatchPattern || (this.hatchPattern = ctx.createPattern(this.hatch, 'repeat'));
+    ctx.fill(tribes);
     ctx.strokeStyle = 'rgba(9,12,10,0.32)';
     ctx.lineWidth = 0.6;
-    for (const cell of this.cells) {
-      if (!cell.length) continue;
-      this.path(ctx, cell);
-      ctx.stroke();
-    }
+    ctx.stroke(hairlines);
   }
 
   drawBorders(ctx) {
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    const backing = new Path2D();
+    const byInk = new Map();
     for (let i = 0; i < this.cells.length; i++) {
       const cell = this.cells[i];
       if (!cell.length) continue;
@@ -491,16 +594,25 @@ export class SandTable {
         if (this.owner[REGIONS[nb].id] === mine) continue;
         const a = this.toScreen(cell[j]);
         const b = this.toScreen(cell[(j + 1) % cell.length]);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = 'rgba(6,8,7,0.65)';
-        ctx.lineWidth = 3.2;
-        ctx.stroke();
-        ctx.strokeStyle = (STATES[mine].ink || '#96a096') + 'cc';
-        ctx.lineWidth = 1.3;
-        ctx.stroke();
+        backing.moveTo(a.x, a.y);
+        backing.lineTo(b.x, b.y);
+        const ink = (STATES[mine].ink || '#96a096') + 'cc';
+        let p = byInk.get(ink);
+        if (!p) { p = new Path2D(); byInk.set(ink, p); }
+        p.moveTo(a.x, a.y);
+        p.lineTo(b.x, b.y);
       }
+    }
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(6,8,7,0.65)';
+    ctx.lineWidth = 3.2;
+    ctx.stroke(backing);
+    ctx.lineWidth = 1.3;
+    for (const [ink, p] of byInk) {
+      ctx.strokeStyle = ink;
+      ctx.stroke(p);
     }
     ctx.restore();
   }
@@ -529,8 +641,9 @@ export class SandTable {
   }
 
   drawRidges(ctx) {
-    ctx.save();
-    ctx.lineCap = 'round';
+    const lit = new Path2D();
+    const dark = new Path2D();
+    const size = 3.4 + 2.6 * Math.min(2, this.view.scale);
     for (const m of this.mountains) {
       const pts = m.pts.map((p) => this.toScreen(p));
       for (let i = 1; i < pts.length; i += 2) {
@@ -540,21 +653,20 @@ export class SandTable {
         if (len < 2) continue;
         const nx = -(b.y - a.y) / len;
         const ny = (b.x - a.x) / len;
-        const size = 3.4 + 2.6 * Math.min(2, this.view.scale);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(a.x + nx * size, a.y + ny * size);
-        ctx.strokeStyle = 'rgba(232,226,205,0.20)';
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(a.x - nx * size * 0.85, a.y - ny * size * 0.85);
-        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-        ctx.lineWidth = 1.3;
-        ctx.stroke();
+        lit.moveTo(a.x, a.y);
+        lit.lineTo(a.x + nx * size, a.y + ny * size);
+        dark.moveTo(a.x, a.y);
+        dark.lineTo(a.x - nx * size * 0.85, a.y - ny * size * 0.85);
       }
     }
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 1.3;
+    ctx.stroke(dark);
+    ctx.strokeStyle = 'rgba(232,226,205,0.20)';
+    ctx.lineWidth = 1.1;
+    ctx.stroke(lit);
     ctx.restore();
   }
 
@@ -718,7 +830,7 @@ export class SandTable {
       const active = fresh <= 6;
       const sel = this.selected === b.id;
       const r = sel ? 8 : 5.5;
-      if (sel || active) {
+      if ((sel || active) && !this.reduced) {
         const pulse = 1 + 0.4 * Math.sin(now / 320);
         ctx.beginPath();
         ctx.arc(p.x, p.y, r * 1.9 * pulse, 0, Math.PI * 2);
@@ -754,6 +866,7 @@ export class SandTable {
   drawPlayback(ctx, now) {
     const pb = this.playback;
     const elapsed = now - pb.start;
+    if (elapsed <= 0) return;
     pb.t = Math.min(1, elapsed / pb.total);
     pb.step = Math.min(pb.battle.marchers.length, Math.floor(elapsed / pb.per));
     const b = pb.battle;

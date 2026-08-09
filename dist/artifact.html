@@ -540,6 +540,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transform: translate(12px, -50%);
 }
 
+.tip.is-left { transform: translate(calc(-100% - 12px), -50%); border-left: 0; border-right: 2px solid var(--bronze); }
+
 .tip b { font-family: var(--display); font-weight: 700; letter-spacing: 0.08em; }
 .tip span { color: var(--bone-3); }
 
@@ -681,7 +683,7 @@ body.is-marching .stage-hint { opacity: 0; }
 .ruler-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto auto minmax(0, 1fr);
   align-items: center;
   gap: 18px;
   padding: 0 22px;
@@ -718,6 +720,9 @@ body.is-marching .stage-hint { opacity: 0; }
 }
 
 .speed:hover { color: var(--bone-2); border-color: #3c4a43; }
+
+.speed[disabled] { opacity: 0.35; cursor: not-allowed; }
+.speed[disabled]:hover { color: var(--bone-3); border-color: var(--patina-edge); }
 
 .speed[aria-pressed="true"] {
   color: #f0e6c4;
@@ -864,7 +869,10 @@ body.is-marching .stage-hint { opacity: 0; }
   .panel-left, .panel-right { border: 0; border-top: 1px solid var(--patina-edge); }
   .chron { max-height: 300px; }
   .detail { max-height: 340px; }
-  .ruler-wrap { position: sticky; bottom: 0; z-index: 10; padding-bottom: 4px; }
+  .ruler-wrap { position: sticky; bottom: 0; z-index: 10; padding: 0 12px 4px; gap: 8px; }
+  .play { padding: 7px 10px; }
+  .play-text { letter-spacing: 0.1em; text-indent: 0.1em; }
+  .speed { padding: 5px 6px; letter-spacing: 0.04em; }
   .caption { bottom: 10px; padding: 9px 11px 10px; }
   .caption-line { font-size: 13px; }
   body.is-marching .panel-left { opacity: 1; }
@@ -937,6 +945,7 @@ body.is-marching .stage-hint { opacity: 0; }
       <span class="play-icon" id="playIcon">▶</span><span class="play-text" id="playText">推演</span>
     </button>
     <button class="speed" id="btnSpeed" aria-pressed="false" title="解说停留时长减半">倍速</button>
+    <button class="speed" id="btnSound" aria-pressed="false" title="朗读解说，战事落定敲一记编钟">朗读</button>
     <div class="ruler" id="ruler" role="slider" tabindex="0"
          aria-label="纪年" aria-valuemin="-475" aria-valuemax="-221" aria-valuenow="-475" aria-valuetext="前475年">
       <div class="ruler-acts" id="acts"></div>
@@ -2013,6 +2022,91 @@ function formatYear(y) {
   return y < 0 ? `前${-y}` : `${y}`;
 }
 
+// 声：解说朗读用浏览器自带的语音合成，战事落定敲一记编钟。
+// 语音是否可用、可用哪一把嗓子，各系统不同，故此处只做检测与降级，不作承诺。
+
+const ZH = /^(zh|cmn)/i;
+
+const speech = {
+  ready: false,
+  voice: null,
+  enabled: false,
+
+  probe() {
+    if (!('speechSynthesis' in window)) return false;
+    const pick = () => {
+      const voices = speechSynthesis.getVoices() || [];
+      const zh = voices.filter((v) => ZH.test(v.lang));
+      if (!zh.length) return false;
+      // 本地嗓音无需联网，优先；其次挑普通话
+      this.voice = zh.find((v) => v.localService && /CN|Hans|cmn/i.test(v.lang))
+        || zh.find((v) => v.localService)
+        || zh.find((v) => /CN|Hans|cmn/i.test(v.lang))
+        || zh[0];
+      this.ready = true;
+      return true;
+    };
+    if (pick()) return true;
+    speechSynthesis.addEventListener('voiceschanged', pick, { once: true });
+    return false;
+  },
+
+  say(text, onEnd) {
+    if (!this.enabled || !this.ready || !text) { onEnd?.(); return; }
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.voice = this.voice;
+      u.lang = this.voice?.lang || 'zh-CN';
+      u.rate = 0.95;
+      u.pitch = 0.95;
+      u.onend = () => onEnd?.();
+      u.onerror = () => onEnd?.();
+      speechSynthesis.speak(u);
+    } catch {
+      onEnd?.();
+    }
+  },
+
+  hush() {
+    if ('speechSynthesis' in window) {
+      try { speechSynthesis.cancel(); } catch { /* 无嗓音时静默 */ }
+    }
+  },
+};
+
+// 编钟一击：基频加几个不谐分音，快起慢落
+let ac = null;
+
+function chime(kind = 'war') {
+  if (!speech.enabled) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+    const t = ac.currentTime;
+    const base = kind === 'war' ? 196 : 262;
+    const out = ac.createGain();
+    out.gain.value = kind === 'war' ? 0.16 : 0.1;
+    out.connect(ac.destination);
+    // 分音比取自编钟的近似：正鼓与侧鼓之外，尚有若干不谐的余响
+    [[1, 1], [2.01, 0.5], [2.76, 0.28], [5.4, 0.12], [8.9, 0.06]].forEach(([ratio, amp], i) => {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'sine';
+      o.frequency.value = base * ratio;
+      const decay = kind === 'war' ? 2.6 - i * 0.35 : 1.6 - i * 0.22;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(amp, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.3, decay));
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + Math.max(0.4, decay) + 0.05);
+    });
+  } catch {
+    /* 音频不可用时不作声 */
+  }
+}
+
 // 沙盘本体：起伏、水系、疆域镶嵌、兵棋与行军推演，全部画在一张 canvas 上。
 
 
@@ -2038,6 +2132,7 @@ const COAST_FROM = 7;   // 鸭绿江口
 const COAST_TO = 36;    // 北部湾
 const GRID = 300;       // 高程场分辨率
 const SAMPLE = 260;     // 陆地采样分辨率
+const CAM_MS = 900;      // 镜头推移时长
 const KM_PER_UNIT = 1.112; // 一个盘面单位约当的公里数（一度纬距 = 100 单位）
 
 class SandTable {
@@ -2053,6 +2148,8 @@ class SandTable {
     this.hover = null;
     this.selected = null;
     this.view = { scale: 1, x: 0, y: 0 };
+    this.dirty = true;
+    this.reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.build();
   }
 
@@ -2091,6 +2188,7 @@ class SandTable {
     this.sampleLand();
     this.buildRelief();
     this.buildGrain();
+    this.buildHatch();
   }
 
   // 只有落在海岸线以内的采样点才算疆土——国名与国力都据此计
@@ -2202,6 +2300,19 @@ class SandTable {
     this.relief.getContext('2d').putImageData(img, 0, 0);
   }
 
+  buildHatch() {
+    const n = 7;
+    const c = offscreen(n, n);
+    const g = c.getContext('2d');
+    g.strokeStyle = 'rgba(232,226,210,0.13)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(-n, n); g.lineTo(n, -n);
+    g.moveTo(0, n * 2); g.lineTo(n * 2, 0);
+    g.stroke();
+    this.hatch = c;
+  }
+
   buildGrain() {
     const n = 160;
     const c = offscreen(n, n);
@@ -2271,7 +2382,8 @@ class SandTable {
     REGIONS.forEach((r, i) => { if (next[r.id] !== this.owner[r.id]) moved.push(i); });
     this.prevOwner = animate && moved.length ? this.owner : next;
     this.owner = next;
-    this.morph = animate && moved.length ? 0 : 1;
+    if (animate && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }
+    else { this.morph = 1; this.hasPrev = false; }
     this.year = year;
     this.flash = animate && moved.length ? { idx: moved, start: performance.now() } : null;
     return moved;
@@ -2301,14 +2413,16 @@ class SandTable {
     return best;
   }
 
-  play(battle) {
+  play(battle, per = 1250) {
     const n = battle.marchers.length;
-    this.playback = {
-      battle, t: 0, step: 0, start: performance.now(),
-      per: 1250, tail: 1900, total: n * 1250 + 1900,
-    };
     const pts = [battle.at, ...battle.marchers.flatMap((m) => m.pts)];
     this.flyTo(boundsOf(pts));
+    // 等镜头落定再起兵，否则画面一边推近一边画箭头，看着晕
+    const wait = this.cam ? CAM_MS + 120 : 0;
+    this.playback = {
+      battle, t: 0, step: 0, start: performance.now() + wait,
+      per, tail: 1900, total: n * per + 1900,
+    };
   }
 
   stop() { this.playback = null; }
@@ -2325,16 +2439,17 @@ class SandTable {
         y: (this.css.h - this.bbox.h * s) / 2 - this.bbox.y0 * s,
       },
       start: performance.now(),
-      dur: 750,
+      dur: CAM_MS,
     };
+    if (this.reduced) { Object.assign(this.view, this.cam.to); this.cam = null; this.dirty = true; }
   }
 
   // 推演时把镜头压到战场上，否则行军只是几根短线
   flyTo(box, now = performance.now()) {
     const w = Math.max(box.x1 - box.x0, 1);
     const h = Math.max(box.y1 - box.y0, 1);
-    const want = Math.min((this.css.w * 0.5) / w, (this.css.h * 0.54) / h) / this.base;
-    const scale = Math.max(1.1, Math.min(5, want));
+    const want = Math.min((this.css.w * 0.46) / w, (this.css.h * 0.5) / h) / this.base;
+    const scale = Math.max(1.15, Math.min(3.2, want));
     const s = this.base * scale;
     this.cam = {
       from: { ...this.view },
@@ -2344,14 +2459,32 @@ class SandTable {
         y: this.css.h * 0.43 - ((box.y0 + box.y1) / 2) * s,
       },
       start: now,
-      dur: 700,
+      dur: CAM_MS,
     };
+    if (this.reduced) { Object.assign(this.view, this.cam.to); this.cam = null; this.dirty = true; }
+  }
+
+  // 盘面本身只在「视角、年份、图层」变了才重绘，缓存下来；
+  // 每帧只重画会动的那几层。此前逐帧全量重绘，是卡顿的根子。
+  boardKey() {
+    const v = this.view;
+    const bits = Object.values(this.layers).map((b) => (b ? 1 : 0)).join('');
+    return `${v.x.toFixed(1)},${v.y.toFixed(1)},${v.scale.toFixed(4)},${this.year},${bits},${this.css.w}x${this.css.h}`;
+  }
+
+  animating() {
+    if (this.morph < 1 || this.cam || this.playback || this.flash) return true;
+    if (this.reduced || !this.layers.battles) return false;
+    if (this.selected) return true;
+    return this.battles.some((b) => b.year <= this.year && this.year - b.year <= 6);
   }
 
   draw(now) {
-    const ctx = this.ctx;
     if (!this.css) return;
-    if (this.morph < 1) this.morph = Math.min(1, this.morph + 0.05);
+    if (this.morph < 1) {
+      this.morph = Math.min(1, this.morph + 0.05);
+      if (this.morph >= 1) this.hasPrev = false;
+    }
     if (this.cam) {
       const k = ease(Math.min(1, (now - this.cam.start) / this.cam.dur));
       const { from, to } = this.cam;
@@ -2360,9 +2493,74 @@ class SandTable {
       this.view.y = from.y + (to.y - from.y) * k;
       if (k >= 1) this.cam = null;
     }
+
+    const key = this.boardKey();
+    const boardStale = key !== this.boardCacheKey;
+    if (!boardStale && !this.dirty && !this.animating()) return;
+    this.dirty = false;
+
+    const glide = this.cam && this.board && this.boardView;
+    const held = this.scrubbing && this.board && now - (this.lastBoardAt || 0) < 70;
+    if (boardStale && !glide && !held) {
+      this.renderBoard();
+      this.boardCacheKey = key;
+      this.lastBoardAt = now;
+    }
+
+    const ctx = this.ctx;
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
     ctx.clearRect(0, 0, this.css.w, this.css.h);
+    if (glide) {
+      const k = this.view.scale / this.boardView.scale;
+      ctx.save();
+      ctx.translate(this.view.x - this.boardView.x * k, this.view.y - this.boardView.y * k);
+      ctx.scale(k, k);
+      ctx.drawImage(this.board, 0, 0, this.css.w, this.css.h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(this.board, 0, 0, this.css.w, this.css.h);
+      if (this.morph < 1 && this.hasPrev) {
+        ctx.globalAlpha = 1 - ease(this.morph);
+        ctx.drawImage(this.boardPrev, 0, 0, this.css.w, this.css.h);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    ctx.save();
+    this.path(ctx, this.outline);
+    ctx.clip();
+    this.drawFlash(ctx, now);
+    this.drawHover(ctx);
+    ctx.restore();
+
+    if (this.layers.battles) this.drawBattles(ctx, now);
+    if (this.playback) this.drawPlayback(ctx, now);
+
+    this.drawPlate(ctx);
+    this.drawCompass(ctx);
+    this.drawScale(ctx);
+    if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
+
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = this.grainPattern || (this.grainPattern = ctx.createPattern(this.grain, 'repeat'));
+    ctx.fillRect(0, 0, this.css.w, this.css.h);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  renderBoard() {
+    if (!this.board || this.board.width !== this.canvas.width || this.board.height !== this.canvas.height) {
+      this.board = offscreen(this.canvas.width, this.canvas.height);
+      this.boardCtx = this.board.getContext('2d');
+      this.grainPattern = null;
+    }
+    this.boardView = { ...this.view };
+    const ctx = this.boardCtx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.board.width, this.board.height);
+    ctx.scale(this.dpr, this.dpr);
     ctx.fillStyle = PALETTE.void;
     ctx.fillRect(0, 0, this.css.w, this.css.h);
 
@@ -2395,9 +2593,7 @@ class SandTable {
     this.drawRidges(ctx);
     if (this.layers.rivers) this.drawRivers(ctx);
     this.drawBorders(ctx);
-    this.drawFlash(ctx, now);
     if (this.layers.walls) this.drawWalls(ctx);
-    this.drawHover(ctx);
     ctx.restore();
 
     this.drawRim(ctx);
@@ -2405,19 +2601,17 @@ class SandTable {
     if (this.layers.passes) this.drawPasses(ctx);
     this.drawCapitals(ctx);
     if (this.layers.labels) this.drawNames(ctx);
-    if (this.layers.battles) this.drawBattles(ctx, now);
-    if (this.playback) this.drawPlayback(ctx, now);
-
-    this.drawPlate(ctx);
-    this.drawCompass(ctx);
-    this.drawScale(ctx);
-    if (!this.playback && this.css.w > 560) this.drawLegend(ctx);
-
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = ctx.createPattern(this.grain, 'repeat');
-    ctx.fillRect(0, 0, this.css.w, this.css.h);
-    ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  toPath(pts, close = true, into = null) {
+    const p = into || new Path2D();
+    for (let i = 0; i < pts.length; i++) {
+      const q = this.toScreen(pts[i]);
+      if (i === 0) p.moveTo(q.x, q.y); else p.lineTo(q.x, q.y);
+    }
+    if (close) p.closePath();
+    return p;
   }
 
   path(ctx, pts, close = true) {
@@ -2448,51 +2642,54 @@ class SandTable {
   }
 
   fillFor(i) {
-    const id = REGIONS[i].id;
-    const now = STATES[this.owner[id]];
-    const was = STATES[this.prevOwner[id]] || now;
-    if (this.morph >= 1 || now === was) return now.color;
-    return mix(was.color, now.color, ease(this.morph));
+    return STATES[this.owner[REGIONS[i].id]].color;
+  }
+
+  snapshotBoard() {
+    if (!this.board) return false;
+    if (!this.boardPrev || this.boardPrev.width !== this.board.width || this.boardPrev.height !== this.board.height) {
+      this.boardPrev = offscreen(this.board.width, this.board.height);
+      this.boardPrevCtx = this.boardPrev.getContext('2d');
+    }
+    this.boardPrevCtx.setTransform(1, 0, 0, 1, 0, 0);
+    this.boardPrevCtx.clearRect(0, 0, this.boardPrev.width, this.boardPrev.height);
+    this.boardPrevCtx.drawImage(this.board, 0, 0);
+    return true;
   }
 
   drawTerritory(ctx) {
+    const byColor = new Map();
+    const tribes = new Path2D();
+    const hairlines = new Path2D();
     for (let i = 0; i < this.cells.length; i++) {
-      if (!this.cells[i].length || !this.landArea[i]) continue;
+      const cell = this.cells[i];
+      if (!cell.length) continue;
+      this.toPath(cell, true, hairlines);
+      if (!this.landArea[i]) continue;
       const st = STATES[this.owner[REGIONS[i].id]];
-      this.path(ctx, this.cells[i]);
-      // 化外之地压暗后退，列国之土才浮得起来
-      ctx.fillStyle = st.tribe ? mix(this.fillFor(i), '#0a0d0b', 0.62) : this.fillFor(i);
-      ctx.globalAlpha = st.tribe ? 0.78 : 0.62;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      if (st.tribe) {
-        ctx.save();
-        ctx.clip();
-        ctx.strokeStyle = 'rgba(232,226,210,0.075)';
-        ctx.lineWidth = 1;
-        const bb = boundsOf(this.cells[i].map((p) => this.toScreen(p)));
-        for (let x = bb.x0 - bb.h; x < bb.x1 + bb.h; x += 8) {
-          ctx.beginPath();
-          ctx.moveTo(x, bb.y0);
-          ctx.lineTo(x + bb.h, bb.y1);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
+      const color = st.tribe ? mix(this.fillFor(i), '#0d110e', 0.46) : this.fillFor(i);
+      let g = byColor.get(color);
+      if (!g) { g = { path: new Path2D(), tribe: st.tribe }; byColor.set(color, g); }
+      this.toPath(cell, true, g.path);
+      if (st.tribe) this.toPath(cell, true, tribes);
     }
+    for (const [color, g] of byColor) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = g.tribe ? 0.72 : 0.62;
+      ctx.fill(g.path);
+    }
+    ctx.globalAlpha = 1;
+    // 化外之地的斜纹改用图案填充，不再逐格裁剪画线
+    ctx.fillStyle = this.hatchPattern || (this.hatchPattern = ctx.createPattern(this.hatch, 'repeat'));
+    ctx.fill(tribes);
     ctx.strokeStyle = 'rgba(9,12,10,0.32)';
     ctx.lineWidth = 0.6;
-    for (const cell of this.cells) {
-      if (!cell.length) continue;
-      this.path(ctx, cell);
-      ctx.stroke();
-    }
+    ctx.stroke(hairlines);
   }
 
   drawBorders(ctx) {
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    const backing = new Path2D();
+    const byInk = new Map();
     for (let i = 0; i < this.cells.length; i++) {
       const cell = this.cells[i];
       if (!cell.length) continue;
@@ -2503,16 +2700,25 @@ class SandTable {
         if (this.owner[REGIONS[nb].id] === mine) continue;
         const a = this.toScreen(cell[j]);
         const b = this.toScreen(cell[(j + 1) % cell.length]);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = 'rgba(6,8,7,0.65)';
-        ctx.lineWidth = 3.2;
-        ctx.stroke();
-        ctx.strokeStyle = (STATES[mine].ink || '#96a096') + 'cc';
-        ctx.lineWidth = 1.3;
-        ctx.stroke();
+        backing.moveTo(a.x, a.y);
+        backing.lineTo(b.x, b.y);
+        const ink = (STATES[mine].ink || '#96a096') + 'cc';
+        let p = byInk.get(ink);
+        if (!p) { p = new Path2D(); byInk.set(ink, p); }
+        p.moveTo(a.x, a.y);
+        p.lineTo(b.x, b.y);
       }
+    }
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(6,8,7,0.65)';
+    ctx.lineWidth = 3.2;
+    ctx.stroke(backing);
+    ctx.lineWidth = 1.3;
+    for (const [ink, p] of byInk) {
+      ctx.strokeStyle = ink;
+      ctx.stroke(p);
     }
     ctx.restore();
   }
@@ -2541,8 +2747,9 @@ class SandTable {
   }
 
   drawRidges(ctx) {
-    ctx.save();
-    ctx.lineCap = 'round';
+    const lit = new Path2D();
+    const dark = new Path2D();
+    const size = 3.4 + 2.6 * Math.min(2, this.view.scale);
     for (const m of this.mountains) {
       const pts = m.pts.map((p) => this.toScreen(p));
       for (let i = 1; i < pts.length; i += 2) {
@@ -2552,21 +2759,20 @@ class SandTable {
         if (len < 2) continue;
         const nx = -(b.y - a.y) / len;
         const ny = (b.x - a.x) / len;
-        const size = 3.4 + 2.6 * Math.min(2, this.view.scale);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(a.x + nx * size, a.y + ny * size);
-        ctx.strokeStyle = 'rgba(232,226,205,0.20)';
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(a.x - nx * size * 0.85, a.y - ny * size * 0.85);
-        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-        ctx.lineWidth = 1.3;
-        ctx.stroke();
+        lit.moveTo(a.x, a.y);
+        lit.lineTo(a.x + nx * size, a.y + ny * size);
+        dark.moveTo(a.x, a.y);
+        dark.lineTo(a.x - nx * size * 0.85, a.y - ny * size * 0.85);
       }
     }
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 1.3;
+    ctx.stroke(dark);
+    ctx.strokeStyle = 'rgba(232,226,205,0.20)';
+    ctx.lineWidth = 1.1;
+    ctx.stroke(lit);
     ctx.restore();
   }
 
@@ -2730,7 +2936,7 @@ class SandTable {
       const active = fresh <= 6;
       const sel = this.selected === b.id;
       const r = sel ? 8 : 5.5;
-      if (sel || active) {
+      if ((sel || active) && !this.reduced) {
         const pulse = 1 + 0.4 * Math.sin(now / 320);
         ctx.beginPath();
         ctx.arc(p.x, p.y, r * 1.9 * pulse, 0, Math.PI * 2);
@@ -2766,6 +2972,7 @@ class SandTable {
   drawPlayback(ctx, now) {
     const pb = this.playback;
     const elapsed = now - pb.start;
+    if (elapsed <= 0) return;
     pb.t = Math.min(1, elapsed / pb.total);
     pb.step = Math.min(pb.battle.marchers.length, Math.floor(elapsed / pb.per));
     const b = pb.battle;
@@ -3208,14 +3415,16 @@ let scrubbing = false;
 ruler.addEventListener('pointerdown', (e) => {
   if (e.target.closest('.act')) return;
   scrubbing = true;
+  table.scrubbing = true;
   hideCaption();
   if (detailMode !== 'act') showAct();
   ruler.setPointerCapture(e.pointerId);
-  setYear(yearFromEvent(e));
+  setYear(yearFromEvent(e), false);
   pause();
 });
-ruler.addEventListener('pointermove', (e) => { if (scrubbing) setYear(yearFromEvent(e)); });
-ruler.addEventListener('pointerup', () => { scrubbing = false; syncChron(); });
+// 拖动时不做过渡动画：每换一年都跑一遍二十帧的渐变，正是拖不动的原因
+ruler.addEventListener('pointermove', (e) => { if (scrubbing) setYear(yearFromEvent(e), false); });
+ruler.addEventListener('pointerup', () => { scrubbing = false; table.scrubbing = false; table.dirty = true; syncChron(); });
 ruler.addEventListener('keydown', (e) => {
   const step = e.shiftKey ? 10 : 1;
   if (detailMode !== 'act' && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) { hideCaption(); showAct(); }
@@ -3250,6 +3459,8 @@ $('chron').addEventListener('click', (e) => {
   else { setYear(+li.dataset.year); showEvent(EVENTS[+li.dataset.i]); }
 });
 
+let chronAnchor = null;
+
 function syncChron() {
   const items = $('chron').children;
   let anchor = null;
@@ -3260,33 +3471,68 @@ function syncChron() {
     li.classList.toggle('is-now', now);
     if (y <= year) anchor = li;
   }
-  if (anchor && !scrubbing) {
+  // 逐年重启平滑滚动会互相打断，只在当前条目真的换了才滚
+  if (anchor && anchor !== chronAnchor && !scrubbing) {
+    chronAnchor = anchor;
     const box = $('chron');
     const top = anchor.offsetTop - box.clientHeight * 0.42;
-    box.scrollTo({ top, behavior: 'smooth' });
+    box.scrollTo({ top, behavior: playing ? 'smooth' : 'auto' });
   }
 }
 
 /* ── 国力 ─────────────────────────────────────── */
+
+const powerBox = $('power');
+const powerRows = new Map();
+let powerOrder = '';
+
+function powerRow(id) {
+  let row = powerRows.get(id);
+  if (row) return row;
+  const st = STATES[id];
+  const el = document.createElement('div');
+  el.className = 'pw';
+  el.innerHTML = `<span class="pw-name" style="color:${st.ink || st.color}">${st.name}</span>`
+    + `<span class="pw-bar"><i class="pw-fill" style="background-color:${st.color}"></i></span>`
+    + '<span class="pw-num"></span>';
+  row = { el, fill: el.querySelector('.pw-fill'), num: el.querySelector('.pw-num') };
+  powerRows.set(id, row);
+  return row;
+}
+
+const goneNote = document.createElement('p');
+goneNote.className = 'dt-empty';
+goneNote.style.marginTop = '6px';
 
 function syncPower() {
   const power = table.power();
   const owner = ownerAt(year);
   const counts = new Map();
   for (const r of REGIONS) counts.set(owner[r.id], (counts.get(owner[r.id]) || 0) + 1);
-  const rows = [...power.entries()].sort((a, b) => b[1] - a[1]);
+  const rows = [...power.entries()].sort((a, b) => b[1] - a[1])
+    .filter(([id, v]) => SEVEN.includes(id) || v >= 1.4);
   const max = rows.length ? rows[0][1] : 1;
-  const shown = rows.filter(([id, v]) => SEVEN.includes(id) || v >= 1.4);
-  $('power').innerHTML = shown.map(([id, v]) => {
-    const st = STATES[id];
-    return `<div class="pw">
-      <span class="pw-name" style="color:${st.ink || st.color}">${st.name}</span>
-      <span class="pw-bar"><i class="pw-fill" style="width:${(v / max) * 100}%;background-color:${st.color}"></i></span>
-      <span class="pw-num">${counts.get(id) || 0}郡 · 带甲${Math.round(v * 4.5)}万</span>
-    </div>`;
-  }).join('') + (shown.length < 7
-    ? `<p class="dt-empty" style="margin-top:6px">${SEVEN.filter((s) => !power.has(s)).map((s) => STATES[s].name).join('、')} 已亡</p>`
-    : '');
+
+  const order = rows.map(([id]) => id).join(',');
+  if (order !== powerOrder) {
+    powerOrder = order;
+    for (const [id] of rows) powerBox.appendChild(powerRow(id).el);
+    for (const [id, row] of powerRows) {
+      if (!rows.some(([x]) => x === id)) row.el.remove();
+    }
+  }
+  for (const [id, v] of rows) {
+    const row = powerRow(id);
+    row.fill.style.width = `${(v / max) * 100}%`;
+    row.num.textContent = `${counts.get(id) || 0}郡 · 带甲${Math.round(v * 4.5)}万`;
+  }
+  const gone = SEVEN.filter((x) => !power.has(x));
+  if (gone.length) {
+    goneNote.textContent = `${gone.map((x) => STATES[x].name).join('、')} 已亡`;
+    powerBox.appendChild(goneNote);
+  } else {
+    goneNote.remove();
+  }
 }
 
 /* ── 案上 ─────────────────────────────────────── */
@@ -3379,8 +3625,10 @@ const cap = $('caption');
 const SEALS = { 战: '#c8352b', 变: '#8fae4e', 纵: '#4a9db4', 并: '#c9a227', 都: '#9b66ad', 学: '#b98cc4', 工: '#a8845c' };
 
 function startMarch(b) {
-  march = { battle: b, step: -1 };
-  table.play(b);
+  march = { battle: b, step: -1, struck: false };
+  const talk = speech.enabled && speech.ready;
+  const avg = b.steps.reduce((n, t) => n + t.length, 0) / b.steps.length;
+  table.play(b, talk ? Math.max(1600, avg * 190) : 1250);
   document.body.classList.add('is-marching');
   cap.hidden = false;
   cap.classList.remove('is-lore');
@@ -3393,9 +3641,11 @@ function startMarch(b) {
 function endMarch(home = true) {
   if (!march) return;
   march = null;
+  speech.hush();
   table.stop();
   if (home) table.flyHome();
   table.selected = null;
+  table.dirty = true;
   document.body.classList.remove('is-marching');
   cap.hidden = true;
 }
@@ -3416,6 +3666,7 @@ function showLore(e) {
 
 function hideCaption() {
   endMarch();
+  speech.hush();
   cap.hidden = true;
   queue = [];
   loreUntil = 0;
@@ -3429,6 +3680,8 @@ function syncCaption(force = false) {
   if (!force && step === march.step) return;
   march.step = step;
   const line = march.battle.steps[step] || march.battle.steps[march.battle.steps.length - 1];
+  speech.say(line);
+  if (step >= march.battle.steps.length - 1 && !march.struck) { march.struck = true; chime('war'); }
   $('capNo').textContent = NUMERALS[step] || NUMERALS[march.battle.steps.length - 1];
   $('capText').textContent = line;
   const dots = $('capDots').children;
@@ -3477,7 +3730,13 @@ function nextLore(now) {
   if (!e) return;
   showLore(e);
   if (playing) showAct();
-  loreUntil = now + dwell(e);
+  const base = dwell(e);
+  loreUntil = now + base;
+  if (speech.enabled && speech.ready) {
+    // 念完再走；万一语音没回调，也有上限兜底
+    loreUntil = now + base * 3;
+    speech.say(`${e.title}。${e.text}`, () => { loreUntil = performance.now() + 500; });
+  }
 }
 
 let toastTimer = 0;
@@ -3505,6 +3764,7 @@ function start() {
 
 function pause() {
   playing = false;
+  speech.hush();
   $('playIcon').textContent = '▶';
   $('playText').textContent = '推演';
 }
@@ -3519,8 +3779,33 @@ function dwell(x) {
   if (typeof x === 'object') {
     return Math.min(5600, 1500 + (x.title.length + x.text.length) * 62) * speed;
   }
-  return NOTABLE.has(x) ? 1250 * speed : 55;
+  return NOTABLE.has(x) ? 1250 * speed : 110;
 }
+
+/* ── 声 ─────────────────────────────────────── */
+
+const btnSound = $('btnSound');
+let soundReady = speech.probe();
+
+function refreshSoundBtn() {
+  soundReady = speech.ready;
+  btnSound.disabled = !soundReady;
+  btnSound.title = soundReady
+    ? '朗读解说，战事落定敲一记编钟'
+    : '此浏览器未提供中文语音，无法朗读';
+}
+refreshSoundBtn();
+if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', refreshSoundBtn);
+
+btnSound.addEventListener('click', () => {
+  speech.enabled = !speech.enabled;
+  btnSound.setAttribute('aria-pressed', String(speech.enabled));
+  if (!speech.enabled) speech.hush();
+  else speech.say('戰國沙盤');
+});
+
+document.addEventListener('visibilitychange', () => { if (document.hidden) speech.hush(); });
+window.addEventListener('pagehide', () => speech.hush());
 
 $('btnSpeed').addEventListener('click', () => {
   speed = speed === 1 ? 0.5 : 1;
@@ -3560,6 +3845,14 @@ function frame(now) {
 
 const tip = $('tip');
 let dragging = null;
+
+function placeTip(px, py) {
+  const w = tip.offsetWidth + 18;
+  const flip = px + w > stage.clientWidth;
+  tip.classList.toggle('is-left', flip);
+  tip.style.left = `${px}px`;
+  tip.style.top = `${Math.max(16, Math.min(stage.clientHeight - 16, py))}px`;
+}
 const touches = new Map();
 let pinch = null;
 
@@ -3598,24 +3891,24 @@ canvas.addEventListener('pointermove', (e) => {
   }
   const b = table.battleAt(px, py);
   if (b) {
+    if (table.hover !== null) table.dirty = true;
     table.hover = null;
     canvas.style.cursor = 'pointer';
     tip.hidden = false;
     tip.innerHTML = `<b>${b.name}</b> <span>${formatYear(b.year)}</span>`;
-    tip.style.left = `${px}px`;
-    tip.style.top = `${py}px`;
+    placeTip(px, py);
     return;
   }
   canvas.style.cursor = '';
   const i = table.regionAt(px, py);
+  if (i !== table.hover) table.dirty = true;
   table.hover = i;
   if (i < 0) { tip.hidden = true; return; }
   const rg = REGIONS[i];
   const st = STATES[table.owner[rg.id]];
   tip.hidden = false;
   tip.innerHTML = `<b>${rg.name}</b> <span style="color:${st.ink || st.color}">${st.name}</span>`;
-  tip.style.left = `${px}px`;
-  tip.style.top = `${py}px`;
+  placeTip(px, py);
   $('hint').classList.add('is-hidden');
 });
 
@@ -3632,16 +3925,21 @@ canvas.addEventListener('pointerup', (e) => {
   const b = table.battleAt(px, py);
   if (b) { pause(); selectBattle(b.id, true); return; }
   const i = table.regionAt(px, py);
-  if (i >= 0) { hideCaption(); showRegion(i); }
+  if (i >= 0) { pause(); hideCaption(); showRegion(i); }
 });
 
 canvas.addEventListener('pointercancel', (e) => { touches.delete(e.pointerId); pinch = null; dragging = null; });
-canvas.addEventListener('pointerleave', () => { table.hover = null; tip.hidden = true; });
+canvas.addEventListener('pointerleave', () => { table.hover = null; table.dirty = true; tip.hidden = true; });
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const r = canvas.getBoundingClientRect();
-  table.zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+  // 触控板一次轻扫连发数十个 wheel，故按位移大小取指数并夹住单次幅度
+  let d = e.deltaY;
+  if (e.deltaMode === 1) d *= 16;
+  else if (e.deltaMode === 2) d *= 400;
+  d = Math.max(-64, Math.min(64, d));
+  table.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-d * 0.0018));
   $('hint').classList.add('is-hidden');
 }, { passive: false });
 
@@ -3653,6 +3951,7 @@ for (const chip of document.querySelectorAll('.chip')) {
   chip.addEventListener('click', () => {
     const key = chip.dataset.layer;
     table.layers[key] = !table.layers[key];
+    table.dirty = true;
     chip.classList.toggle('is-on', table.layers[key]);
     chip.setAttribute('aria-pressed', String(table.layers[key]));
   });
