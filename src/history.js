@@ -683,17 +683,17 @@ export const EVENTS = [
 
 // 六幕：把二百五十四年切成有主题的段落，读者才知道该看什么
 export const ACTS = [
-  { no: '一', from: -475, to: -404, title: '晋亡而战国立',
+  { no: '一', roman: 'I', en: 'THE FALL OF JIN', from: -475, to: -404, title: '晋亡而战国立',
     thesis: '春秋的霸主秩序散了。三家分晋、田氏代齐，卿大夫取代诸侯成为主角；越灭吴而北会诸侯，中原一时无主。' },
-  { no: '二', from: -403, to: -342, title: '魏之霸',
+  { no: '二', roman: 'II', en: 'THE HEGEMONY OF WEI', from: -403, to: -342, title: '魏之霸',
     thesis: '李悝尽地力、吴起练武卒，魏先行一步而独强六十年。但大梁居四战之地，经不起两线——桂陵、马陵之后，霸业一战而尽。' },
-  { no: '三', from: -341, to: -297, title: '三极与纵横',
+  { no: '三', roman: 'III', en: 'ALLIANCES AND BETRAYALS', from: -341, to: -297, title: '三极与纵横',
     thesis: '秦并巴蜀、齐几灭燕、楚地最广，天下成三极之势。苏秦张仪往来其间：合纵者说以存亡，连横者诱以土地，各国比的已不是德，是算。' },
-  { no: '四', from: -296, to: -261, title: '白起的时代',
+  { no: '四', roman: 'IV', en: 'THE AGE OF BAI QI', from: -296, to: -261, title: '白起的时代',
     thesis: '伊阙二十四万、鄢郢烧夷陵、华阳十三万。秦以斩首计功，山东诸国的野战兵力被逐次抹去；五国破齐，又去其一极。' },
-  { no: '五', from: -260, to: -242, title: '长平之后',
+  { no: '五', roman: 'V', en: 'AFTER CHANGPING', from: -260, to: -242, title: '长平之后',
     thesis: '四十万降卒尽坑，六国再无成建制的野战军团。邯郸之战与信陵君两度合纵稍挫秦锋，然已是回光。' },
-  { no: '六', from: -241, to: -221, title: '十年而并天下',
+  { no: '六', roman: 'VI', en: 'TEN YEARS TO EMPIRE', from: -241, to: -221, title: '十年而并天下',
     thesis: '尉缭以金三十万斤离间豪臣，李斯定先弱后强之序。自韩始，十年之内六王毕、四海一。' },
 ];
 

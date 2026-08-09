@@ -404,10 +404,13 @@ function toggleCinema() {
     table.startDrift();
     syncCine();
     showCard(actAt(year));
+    wake();
     if (!playing) start();
     document.documentElement.requestFullscreen?.().catch(() => {});
   } else {
     table.stopDrift();
+    document.body.classList.remove('is-idle');
+    clearTimeout(idleTimer);
     card.hidden = true;
     cardShown = null;
     cardUntil = 0;
@@ -421,10 +424,17 @@ function showCard(act) {
   card.hidden = false;
   card.classList.remove('is-out');
   $('cardNo').textContent = act.no;
+  $('cardKicker').textContent = `ACT ${act.roman} · ${-act.from}–${-act.to} BC`;
   $('cardTitle').textContent = act.title;
-  $('cardSpan').textContent = `${formatYear(act.from)} — ${formatYear(act.to)}`;
+  $('cardEn').textContent = act.en;
   $('cardThesis').textContent = act.thesis;
-  cardUntil = performance.now() + 4600;
+  // 重放入场动画：元素依次落位，而非整块淡入
+  for (const el of card.querySelectorAll('.card-rule, .card-eyebrow, .card-title, .card-en, .card-thesis')) {
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+  }
+  cardUntil = performance.now() + 6200;
   if (speech.enabled && speech.ready) {
     speech.say(`第${act.no}幕，${act.title}。${act.thesis}`, () => {
       cardUntil = Math.max(cardUntil, performance.now() + 900);
@@ -439,6 +449,19 @@ function syncCine() {
   $('cineActNo').textContent = a.no;
   $('cineActTitle').textContent = a.title;
   $('cineYear').textContent = formatYear(year);
+  $('cineReign').textContent = eraOf(year);
+}
+
+let idleTimer = 0;
+
+function wake() {
+  document.body.classList.remove('is-idle');
+  clearTimeout(idleTimer);
+  if (cinema) idleTimer = setTimeout(() => document.body.classList.add('is-idle'), 2600);
+}
+
+for (const ev of ['pointermove', 'pointerdown', 'keydown', 'wheel']) {
+  window.addEventListener(ev, wake, { passive: true });
 }
 
 $('btnCinema').addEventListener('click', toggleCinema);

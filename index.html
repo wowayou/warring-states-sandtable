@@ -56,13 +56,23 @@
       <div class="tip" id="tip" hidden></div>
       <div class="cine-hud" id="cineHud" aria-hidden="true">
         <p class="cine-act"><span id="cineActNo">一</span><span id="cineActTitle"></span></p>
-        <p class="cine-year" id="cineYear">前475</p>
+        <div class="cine-year">
+          <span class="cine-year-num" id="cineYear">前475</span>
+          <span class="cine-year-reign" id="cineReign"></span>
+        </div>
       </div>
       <div class="act-card" id="actCard" hidden>
-        <p class="act-card-no"><i id="cardNo">一</i>幕</p>
-        <h2 class="act-card-title" id="cardTitle"></h2>
-        <p class="act-card-span" id="cardSpan"></p>
-        <p class="act-card-thesis" id="cardThesis"></p>
+        <div class="card-inner">
+          <i class="card-rule card-rule-top"></i>
+          <p class="card-eyebrow">
+            <span class="card-no" id="cardNo">一</span>
+            <span class="card-kicker" id="cardKicker">ACT I · 475–404 BC</span>
+          </p>
+          <h2 class="card-title" id="cardTitle"></h2>
+          <p class="card-en" id="cardEn"></p>
+          <i class="card-rule card-rule-bottom"></i>
+          <p class="card-thesis" id="cardThesis"></p>
+        </div>
       </div>
     </section>
 

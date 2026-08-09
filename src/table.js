@@ -498,6 +498,7 @@ export class SandTable {
 
   animating() {
     if (this.morph < 1 || this.cam || this.playback || this.flash || this.drifting) return true;
+    if (this.cinema && !this.reduced) return true;
     if (this.reduced || !this.layers.battles) return false;
     if (this.selected) return true;
     return this.battles.some((b) => b.year <= this.year && this.year - b.year <= 6);
@@ -525,7 +526,7 @@ export class SandTable {
     this.dirty = false;
 
     // 视角在缓动时，先缩放缓存那张，按节流重绘，免得逐帧全量重画
-    const throttle = this.scrubbing ? 95 : this.drifting ? 240 : 0;
+    const throttle = this.scrubbing ? 95 : this.drifting ? 380 : 0;
     const held = throttle > 0 && this.board && now - (this.lastBoardAt || 0) < throttle;
     const glide = this.board && this.boardView && (this.cam || (boardStale && held));
     if (boardStale && !this.cam && !held) {
@@ -571,9 +572,18 @@ export class SandTable {
     }
     this.drawScale(ctx);
 
-    ctx.globalAlpha = 0.3;
+    ctx.globalAlpha = this.cinema ? 0.42 : 0.3;
     ctx.fillStyle = this.grainPattern || (this.grainPattern = ctx.createPattern(this.grain, 'repeat'));
-    ctx.fillRect(0, 0, this.css.w, this.css.h);
+    if (this.cinema) {
+      const gx = ((now / 40) | 0) % 160;
+      const gy = ((now / 27) | 0) % 160;
+      ctx.save();
+      ctx.translate(-gx, -gy);
+      ctx.fillRect(0, 0, this.css.w + 160, this.css.h + 160);
+      ctx.restore();
+    } else {
+      ctx.fillRect(0, 0, this.css.w, this.css.h);
+    }
     ctx.globalAlpha = 1;
     ctx.restore();
   }
