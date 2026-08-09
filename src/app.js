@@ -1,7 +1,7 @@
 import { SandTable } from './table.js';
 import { speech, chime } from './sound.js';
 import { REGIONS } from './atlas.js';
-import { STATES, SEVEN, EVENTS, BATTLES, CHANGES, BASE, ACTS, actAt, START, END, formatYear, ownerAt } from './history.js';
+import { STATES, SEVEN, EVENTS, BATTLES, CHANGES, BASE, ACTS, actAt, START, END, formatYear, cnNumber, ownerAt } from './history.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('table');
@@ -23,21 +23,11 @@ const REIGNS = [
   [-249, -247, '秦庄襄王'], [-246, -221, '秦王政'],
 ];
 
-const DIGITS = '〇一二三四五六七八九';
-
-function cn(n) {
-  if (n <= 10) return n === 10 ? '十' : DIGITS[n];
-  if (n < 20) return '十' + DIGITS[n - 10];
-  const t = Math.floor(n / 10);
-  const o = n % 10;
-  return DIGITS[t] + '十' + (o ? DIGITS[o] : '');
-}
-
 function eraOf(y) {
   const r = REIGNS.find(([a, b]) => y >= a && y <= b);
   if (!r) return '';
   const n = y - r[0] + 1;
-  return `${r[2]}${n === 1 ? '元' : cn(n)}年`;
+  return `${r[2]}${n === 1 ? '元' : cnNumber(n)}年`;
 }
 
 /* ── 铜尺 ─────────────────────────────────────── */
@@ -324,7 +314,7 @@ function startMarch(b) {
   const avg = b.steps.reduce((n, t) => n + t.length, 0) / b.steps.length;
   table.play(b, talk ? Math.max(1600, avg * 190) : 1250);
   document.body.classList.add('is-marching');
-  cap.hidden = false;
+  captionIn();
   cap.classList.remove('is-lore');
   $('capName').textContent = b.name;
   $('capYear').textContent = `${formatYear(b.year)} · ${eraOf(b.year)}`;
@@ -347,7 +337,7 @@ function endMarch(home = true) {
 // 讲解：把随年而来的事说在盘上，而不是只躺在左栏里
 function showLore(e) {
   endMarch();
-  cap.hidden = false;
+  captionIn();
   cap.classList.add('is-lore');
   cap.classList.remove('is-final');
   cap.style.setProperty('--seal', SEALS[e.kind] || 'var(--bronze)');
@@ -358,12 +348,37 @@ function showLore(e) {
   $('capDots').innerHTML = '';
 }
 
+let capTimer = 0;
+let restUntil = 0;
+
+// 上一条先退，退净了下一条才进；中间留一口气
+function captionOut(then) {
+  clearTimeout(capTimer);
+  if (cap.hidden) { then?.(); return 0; }
+  cap.classList.add('is-leaving');
+  capTimer = setTimeout(() => {
+    cap.hidden = true;
+    cap.classList.remove('is-leaving');
+    then?.();
+  }, 460);
+  return 460;
+}
+
+function captionIn() {
+  clearTimeout(capTimer);
+  cap.classList.remove('is-leaving');
+  cap.hidden = false;
+}
+
 function hideCaption() {
   endMarch();
   speech.hush();
+  clearTimeout(capTimer);
   cap.hidden = true;
+  cap.classList.remove('is-leaving');
   queue = [];
   loreUntil = 0;
+  restUntil = 0;
 }
 
 const NUMERALS = ['一', '二', '三', '四', '五', '六'];
@@ -497,6 +512,7 @@ function setYear(y, animate = true) {
     const war = evs.find((e) => e.battle);
     queue = evs.filter((e) => !e.battle);
     loreUntil = 0;
+    restUntil = 0;
     if (war) selectBattle(war.battle);
     else if (queue.length) nextLore(performance.now());
   }
@@ -508,16 +524,19 @@ let loreUntil = 0;
 function nextLore(now) {
   const e = queue.shift();
   if (!e) return;
-  showLore(e);
-  if (cinema && e.at) table.focusOn(e.at, 1.22, 2800);
-  if (playing) showAct();
-  const base = dwell(e);
-  loreUntil = now + base;
-  if (speech.enabled && speech.ready) {
-    // 念完再走；万一语音没回调，也有上限兜底
-    loreUntil = now + base * 3;
-    speech.say(`${e.title}。${e.text}`, () => { loreUntil = performance.now() + 500; });
-  }
+  // 镜头与退场同时起步，新的一条随镜头将定而入——这样衔接才不生硬
+  if (cinema && e.at) table.focusOn(e.at, 1.22, 2600);
+  const lead = captionOut(() => {
+    showLore(e);
+    if (playing) showAct();
+    const base = dwell(e);
+    loreUntil = performance.now() + base;
+    if (speech.enabled && speech.ready) {
+      loreUntil = performance.now() + base * 3;
+      speech.say(`${e.title}。${e.text}`, () => { loreUntil = performance.now() + 700; });
+    }
+  });
+  loreUntil = now + lead + dwell(e);
 }
 
 let toastTimer = 0;
@@ -568,13 +587,30 @@ function dwell(x) {
 const btnSound = $('btnSound');
 let soundReady = speech.probe();
 
+const voicePick = $('voicePick');
+
 function refreshSoundBtn() {
   soundReady = speech.ready;
   btnSound.disabled = !soundReady;
   btnSound.title = soundReady
     ? '朗读解说，战事落定敲一记编钟'
     : '此浏览器未提供中文语音，无法朗读';
+  // 合成嗓音的好坏因人因机而异，故把选择权交出去
+  const list = speech.voices();
+  voicePick.hidden = list.length < 2;
+  if (list.length >= 2 && voicePick.options.length !== list.length) {
+    voicePick.innerHTML = list
+      .map((v) => `<option value="${v.name}">${v.name.replace(/\s*\(.*\)$/, '')}</option>`)
+      .join('');
+    if (speech.voice) voicePick.value = speech.voice.name;
+  }
 }
+
+voicePick.addEventListener('change', () => {
+  speech.use(voicePick.value);
+  speech.hush();
+  if (speech.enabled) speech.say('戰國沙盤');
+});
 refreshSoundBtn();
 if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', refreshSoundBtn);
 
@@ -623,9 +659,14 @@ function frame(now) {
     } else if (queue.length) {
       nextLore(now);
       lastTick = now;
+    } else if (restUntil > now) {
+      lastTick = now;
+    } else if (!cap.hidden) {
+      captionOut();
+      restUntil = now + 620;
+      lastTick = now;
     } else if (now - lastTick > dwell(year)) {
       lastTick = now;
-      if (!cap.hidden) cap.hidden = true;
       if (year >= END) pause(); else setYear(year + 1);
     }
   }

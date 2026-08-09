@@ -37,7 +37,6 @@ export class SandTable {
     this.ctx = canvas.getContext('2d');
     this.year = -475;
     this.owner = ownerAt(this.year);
-    this.prevOwner = this.owner;
     this.morph = 1;
     this.layers = { relief: true, rivers: true, walls: true, passes: true, battles: true, labels: true };
     this.playback = null;
@@ -80,7 +79,6 @@ export class SandTable {
       : { ring: [], spans: [] }));
     this.shapes = warped.map((w) => w.ring);
     this.spans = warped.map((w) => w.spans);
-    this.index = new Map(REGIONS.map((r, i) => [r.id, i]));
 
     this.rivers = RIVERS.map((r) => ({ ...r, pts: smooth(projectAll(r.path), 0.5, 10), at: project(r.label) }));
     this.mountains = MOUNTAINS.map((m) => ({ ...m, pts: smooth(projectAll(m.path), 0.5, 10) }));
@@ -316,7 +314,6 @@ export class SandTable {
     const next = ownerAt(year);
     const moved = [];
     REGIONS.forEach((r, i) => { if (next[r.id] !== this.owner[r.id]) moved.push(i); });
-    this.prevOwner = animate && moved.length ? this.owner : next;
     this.owner = next;
     const still = !this.cam && !this.drifting;
     if (animate && still && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }

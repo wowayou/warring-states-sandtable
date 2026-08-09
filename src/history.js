@@ -715,6 +715,23 @@ export function capitalsAt(year) {
   return CAPITALS.filter((c) => year >= c.from && year < c.to);
 }
 
+const DIGITS = '〇一二三四五六七八九';
+
+// 汉字数目：纪年、幕次、朗读共用一处，不各写一份
+export function cnNumber(n) {
+  if (n < 10) return DIGITS[n];
+  if (n < 20) return '十' + (n % 10 ? DIGITS[n % 10] : '');
+  if (n < 100) return DIGITS[(n / 10) | 0] + '十' + (n % 10 ? DIGITS[n % 10] : '');
+  const h = (n / 100) | 0;
+  const r = n % 100;
+  if (n < 1000) {
+    if (!r) return DIGITS[h] + '百';
+    if (r < 10) return `${DIGITS[h]}百零${DIGITS[r]}`;
+    return DIGITS[h] + '百' + cnNumber(r);
+  }
+  return String(n);
+}
+
 export function formatYear(y) {
   return y < 0 ? `前${-y}` : `${y}`;
 }

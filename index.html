@@ -85,12 +85,15 @@
   </main>
 
   <footer class="ruler-wrap">
+    <div class="controls">
     <button class="play" id="btnPlay" aria-label="自动推演纪年">
       <span class="play-icon" id="playIcon">▶</span><span class="play-text" id="playText">推演</span>
     </button>
     <button class="speed" id="btnSpeed" aria-pressed="false" title="解说停留时长减半">倍速</button>
     <button class="speed" id="btnSound" aria-pressed="false" title="朗读解说，战事落定敲一记编钟">朗读</button>
+    <select class="voice" id="voicePick" hidden aria-label="朗读嗓音"></select>
     <button class="speed cine-btn" id="btnCinema" title="放映：藏起两侧，镜头随解说游走">放映</button>
+    </div>
     <div class="ruler" id="ruler" role="slider" tabindex="0"
          aria-label="纪年" aria-valuemin="-475" aria-valuemax="-221" aria-valuenow="-475" aria-valuetext="前475年">
       <div class="ruler-acts" id="acts"></div>

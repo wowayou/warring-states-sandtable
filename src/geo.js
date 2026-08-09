@@ -92,29 +92,7 @@ export function buildAdjacency(cells, seeds) {
   });
 }
 
-export function polygonArea(poly) {
-  let a = 0;
-  for (let i = 0; i < poly.length; i++) {
-    const p = poly[i];
-    const q = poly[(i + 1) % poly.length];
-    a += p.x * q.y - q.x * p.y;
-  }
-  return a / 2;
-}
 
-export function centroid(poly) {
-  let a = 0, cx = 0, cy = 0;
-  for (let i = 0; i < poly.length; i++) {
-    const p = poly[i];
-    const q = poly[(i + 1) % poly.length];
-    const f = p.x * q.y - q.x * p.y;
-    a += f;
-    cx += (p.x + q.x) * f;
-    cy += (p.y + q.y) * f;
-  }
-  if (Math.abs(a) < 1e-9) return { x: poly[0].x, y: poly[0].y };
-  return { x: cx / (3 * a), y: cy / (3 * a) };
-}
 
 export function pointInPolygon(px, py, poly) {
   let inside = false;

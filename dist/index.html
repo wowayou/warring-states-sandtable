@@ -35,6 +35,10 @@
     "Noto Sans CJK SC", system-ui, sans-serif;
   --num: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
 
+  --edge: 22px;          /* 盘内器具与提示的统一边距 */
+  --pad: 14px;           /* 简册栏内边距 */
+  --cine-x: clamp(30px, 4.6vw, 84px); /* 放映时一切左右元素的基线 */
+
   --rail: 66px;
   --ruler: 106px;
   --col: 262px;
@@ -207,7 +211,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px 8px;
+  padding: 10px var(--pad) 8px;
   border-bottom: 1px solid var(--patina-edge);
   box-shadow: inset 3px 0 0 rgba(201, 162, 39, 0.5);
 }
@@ -249,7 +253,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   display: grid;
   grid-template-columns: 52px 1fr;
   gap: 10px;
-  padding: 7px 14px 7px 12px;
+  padding: 7px var(--pad) 7px 12px;
   cursor: pointer;
   border-left: 2px solid transparent;
   opacity: 0.34;
@@ -336,7 +340,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* 国力 */
 
-.power { padding: 12px 14px 14px; display: grid; gap: 9px; }
+.power { padding: 12px var(--pad) 14px; display: grid; gap: 9px; }
 
 .pw { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 9px; }
 
@@ -379,7 +383,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* 案上：详情 */
 
 .detail {
-  padding: 12px 14px 22px;
+  padding: 12px var(--pad) 22px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #2b342f transparent;
@@ -530,7 +534,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .stage-hint {
   position: absolute;
-  left: 14px;
+  left: var(--edge);
   bottom: 12px;
   font-size: 11px;
   letter-spacing: 0.1em;
@@ -541,7 +545,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .stage-hint.is-hidden { opacity: 0; }
 
-.stage-tools { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 5px; }
+.stage-tools { position: absolute; right: var(--edge); bottom: 12px; display: flex; gap: 5px; }
 
 .tool {
   min-width: 30px;
@@ -579,7 +583,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* 易主提示：盘上闪一下的同时，说清楚是什么易了主 */
 .toast {
   position: absolute;
-  top: 14px;
+  top: var(--edge);
   left: 50%;
   z-index: 6;
   padding: 7px 14px;
@@ -711,10 +715,28 @@ body.is-marching .stage-hint { opacity: 0; }
 
 /* ── 铜尺纪年 ───────────────────────────────────── */
 
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice {
+  align-self: center;
+  max-width: 150px;
+  padding: 5px 7px;
+  font-family: var(--body);
+  font-size: 11px;
+  color: var(--bone-2);
+  background: #0d1414;
+  border: 1px solid var(--patina-edge);
+  border-radius: 0;
+}
+
 .ruler-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: auto auto auto auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 18px;
   padding: 0 22px;
@@ -740,8 +762,6 @@ body.is-marching .stage-hint { opacity: 0; }
 .play-text { font-size: 12px; letter-spacing: 0.24em; text-indent: 0.24em; }
 
 .speed {
-  align-self: center;
-  margin-left: -8px;
   padding: 5px 9px;
   font-size: 11px;
   letter-spacing: 0.14em;
@@ -996,8 +1016,8 @@ body.is-cinema .cine-hud {
 
 .cine-act {
   position: absolute;
-  top: 28px;
-  left: 34px;
+  top: 30px;
+  left: var(--cine-x);
   margin: 0;
   display: flex;
   align-items: center;
@@ -1023,8 +1043,8 @@ body.is-cinema .cine-hud {
 
 .cine-year {
   position: absolute;
-  top: 24px;
-  right: 34px;
+  top: 26px;
+  right: var(--cine-x);
   display: grid;
   justify-items: end;
   gap: 5px;
@@ -1052,8 +1072,8 @@ body.is-cinema .cine-hud {
 /* 易主提示在放映下也去掉框，只留一行宽字距的字 */
 body.is-cinema .toast {
   top: auto;
-  bottom: 132px;
-  left: 40px;
+  bottom: 138px;
+  left: var(--cine-x);
   transform: none;
   padding: 0 0 0 2px;
   background: none;
@@ -1074,7 +1094,7 @@ body.is-cinema .act-card {
   position: absolute;
   inset: 0;
   z-index: 6;
-  padding: 0 clamp(34px, 9vw, 150px);
+  padding: 0 var(--cine-x);
   background: rgba(5, 8, 9, 0.86);
   pointer-events: none;
 }
@@ -1171,9 +1191,9 @@ body.is-cinema .act-card {
 /* ── 下三分之一：自左抹入 ───────────────────────── */
 
 body.is-cinema .caption {
-  left: 40px;
-  bottom: 44px;
-  width: min(720px, calc(100% - 80px));
+  left: var(--cine-x);
+  bottom: 46px;
+  width: min(720px, calc(100% - var(--cine-x) * 2));
   transform: none;
   padding: 0;
   background: none;
@@ -1188,6 +1208,18 @@ body.is-cinema .caption {
 }
 
 body.is-cinema .caption-close { display: none; }
+
+.caption.is-leaving { animation: lowerOut 0.46s ease forwards; }
+
+@keyframes lowerOut {
+  to { opacity: 0; transform: translateX(-14px); }
+}
+
+body.is-cinema .caption.is-leaving { animation: lowerOutCine 0.46s ease forwards; }
+
+@keyframes lowerOutCine {
+  to { opacity: 0; clip-path: inset(0 0 0 24%); }
+}
 
 body.is-cinema .caption-head {
   gap: 14px;
@@ -1227,7 +1259,7 @@ body.is-cinema .caption-no { width: 25px; height: 25px; font-size: 13px; }
 body.is-cinema .caption-dots { max-width: 220px; margin-top: 14px; }
 
 @media (max-width: 820px) {
-  body.is-cinema .caption { left: 18px; bottom: 22px; width: calc(100% - 36px); }
+  body.is-cinema .caption { bottom: 22px; }
   body.is-cinema .caption-name { font-size: 19px; }
   body.is-cinema .caption-line { font-size: 14px; }
   .cine-year-num { font-size: 22px; }
@@ -1316,12 +1348,15 @@ body.is-cinema .caption-dots { max-width: 220px; margin-top: 14px; }
   </main>
 
   <footer class="ruler-wrap">
+    <div class="controls">
     <button class="play" id="btnPlay" aria-label="自动推演纪年">
       <span class="play-icon" id="playIcon">▶</span><span class="play-text" id="playText">推演</span>
     </button>
     <button class="speed" id="btnSpeed" aria-pressed="false" title="解说停留时长减半">倍速</button>
     <button class="speed" id="btnSound" aria-pressed="false" title="朗读解说，战事落定敲一记编钟">朗读</button>
+    <select class="voice" id="voicePick" hidden aria-label="朗读嗓音"></select>
     <button class="speed cine-btn" id="btnCinema" title="放映：藏起两侧，镜头随解说游走">放映</button>
+    </div>
     <div class="ruler" id="ruler" role="slider" tabindex="0"
          aria-label="纪年" aria-valuemin="-475" aria-valuemax="-221" aria-valuenow="-475" aria-valuetext="前475年">
       <div class="ruler-acts" id="acts"></div>
@@ -1428,29 +1463,7 @@ function buildAdjacency(cells, seeds) {
   });
 }
 
-function polygonArea(poly) {
-  let a = 0;
-  for (let i = 0; i < poly.length; i++) {
-    const p = poly[i];
-    const q = poly[(i + 1) % poly.length];
-    a += p.x * q.y - q.x * p.y;
-  }
-  return a / 2;
-}
 
-function centroid(poly) {
-  let a = 0, cx = 0, cy = 0;
-  for (let i = 0; i < poly.length; i++) {
-    const p = poly[i];
-    const q = poly[(i + 1) % poly.length];
-    const f = p.x * q.y - q.x * p.y;
-    a += f;
-    cx += (p.x + q.x) * f;
-    cy += (p.y + q.y) * f;
-  }
-  if (Math.abs(a) < 1e-9) return { x: poly[0].x, y: poly[0].y };
-  return { x: cx / (3 * a), y: cy / (3 * a) };
-}
 
 function pointInPolygon(px, py, poly) {
   let inside = false;
@@ -2493,6 +2506,23 @@ function capitalsAt(year) {
   return CAPITALS.filter((c) => year >= c.from && year < c.to);
 }
 
+const DIGITS = '〇一二三四五六七八九';
+
+// 汉字数目：纪年、幕次、朗读共用一处，不各写一份
+function cnNumber(n) {
+  if (n < 10) return DIGITS[n];
+  if (n < 20) return '十' + (n % 10 ? DIGITS[n % 10] : '');
+  if (n < 100) return DIGITS[(n / 10) | 0] + '十' + (n % 10 ? DIGITS[n % 10] : '');
+  const h = (n / 100) | 0;
+  const r = n % 100;
+  if (n < 1000) {
+    if (!r) return DIGITS[h] + '百';
+    if (r < 10) return `${DIGITS[h]}百零${DIGITS[r]}`;
+    return DIGITS[h] + '百' + cnNumber(r);
+  }
+  return String(n);
+}
+
 function formatYear(y) {
   return y < 0 ? `前${-y}` : `${y}`;
 }
@@ -2500,7 +2530,34 @@ function formatYear(y) {
 // 声：解说朗读用浏览器自带的语音合成，战事落定敲一记编钟。
 // 语音是否可用、可用哪一把嗓子，各系统不同，故此处只做检测与降级，不作承诺。
 
+
+
 const ZH = /^(zh|cmn)/i;
+
+// 书名号、间隔号、破折号读出来都是杂音；标点则决定停顿
+function normalize(text) {
+  return String(text)
+    .replace(/前(\d{2,3})/g, (_, n) => `公元前${cnNumber(+n)}年`)
+    .replace(/(\d{2,4})/g, (m) => (+m > 0 && +m < 1000 ? cnNumber(+m) : m))
+    .replace(/[《》「」『』“”"']/g, '')
+    .replace(/[·•]/g, '，')
+    .replace(/[—–]{1,2}/g, '，')
+    .replace(/[（(][^）)]*[）)]/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+// 分句而后连念，句读之间留一口气——一口气念完整段，正是「生硬」的由来
+function phrases(text) {
+  const out = [];
+  let buf = '';
+  for (const ch of normalize(text)) {
+    buf += ch;
+    if ('。！？；：'.includes(ch)) { out.push(buf); buf = ''; }
+  }
+  if (buf.trim()) out.push(buf);
+  return out.filter((x) => x.replace(/[，。！？；：]/g, '').length);
+}
 
 const speech = {
   ready: false,
@@ -2526,24 +2583,49 @@ const speech = {
     return false;
   },
 
+  rate: 0.9,
+  pitch: 0.92,
+  seq: 0,
+
+  voices() {
+    if (!('speechSynthesis' in window)) return [];
+    return (speechSynthesis.getVoices() || []).filter((v) => ZH.test(v.lang));
+  },
+
+  use(name) {
+    const v = this.voices().find((x) => x.name === name);
+    if (v) this.voice = v;
+  },
+
   say(text, onEnd) {
     if (!this.enabled || !this.ready || !text) { onEnd?.(); return; }
-    try {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.voice = this.voice;
-      u.lang = this.voice?.lang || 'zh-CN';
-      u.rate = 0.95;
-      u.pitch = 0.95;
-      u.onend = () => onEnd?.();
-      u.onerror = () => onEnd?.();
-      speechSynthesis.speak(u);
-    } catch {
-      onEnd?.();
-    }
+    const parts = phrases(text);
+    if (!parts.length) { onEnd?.(); return; }
+    const run = ++this.seq;
+    try { speechSynthesis.cancel(); } catch { /* 忽略 */ }
+    const speak = (i) => {
+      if (run !== this.seq) return;
+      if (i >= parts.length) { onEnd?.(); return; }
+      try {
+        const u = new SpeechSynthesisUtterance(parts[i]);
+        u.voice = this.voice;
+        u.lang = this.voice?.lang || 'zh-CN';
+        u.rate = this.rate;
+        u.pitch = this.pitch;
+        // 句间停一口气，长句后停得久些
+        const gap = parts[i].length > 18 ? 340 : 220;
+        u.onend = () => setTimeout(() => speak(i + 1), gap);
+        u.onerror = () => setTimeout(() => speak(i + 1), gap);
+        speechSynthesis.speak(u);
+      } catch {
+        onEnd?.();
+      }
+    };
+    speak(0);
   },
 
   hush() {
+    this.seq++;
     if ('speechSynthesis' in window) {
       try { speechSynthesis.cancel(); } catch { /* 无嗓音时静默 */ }
     }
@@ -2618,7 +2700,6 @@ class SandTable {
     this.ctx = canvas.getContext('2d');
     this.year = -475;
     this.owner = ownerAt(this.year);
-    this.prevOwner = this.owner;
     this.morph = 1;
     this.layers = { relief: true, rivers: true, walls: true, passes: true, battles: true, labels: true };
     this.playback = null;
@@ -2661,7 +2742,6 @@ class SandTable {
       : { ring: [], spans: [] }));
     this.shapes = warped.map((w) => w.ring);
     this.spans = warped.map((w) => w.spans);
-    this.index = new Map(REGIONS.map((r, i) => [r.id, i]));
 
     this.rivers = RIVERS.map((r) => ({ ...r, pts: smooth(projectAll(r.path), 0.5, 10), at: project(r.label) }));
     this.mountains = MOUNTAINS.map((m) => ({ ...m, pts: smooth(projectAll(m.path), 0.5, 10) }));
@@ -2897,7 +2977,6 @@ class SandTable {
     const next = ownerAt(year);
     const moved = [];
     REGIONS.forEach((r, i) => { if (next[r.id] !== this.owner[r.id]) moved.push(i); });
-    this.prevOwner = animate && moved.length ? this.owner : next;
     this.owner = next;
     const still = !this.cam && !this.drifting;
     if (animate && still && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }
@@ -3967,21 +4046,11 @@ const REIGNS = [
   [-249, -247, '秦庄襄王'], [-246, -221, '秦王政'],
 ];
 
-const DIGITS = '〇一二三四五六七八九';
-
-function cn(n) {
-  if (n <= 10) return n === 10 ? '十' : DIGITS[n];
-  if (n < 20) return '十' + DIGITS[n - 10];
-  const t = Math.floor(n / 10);
-  const o = n % 10;
-  return DIGITS[t] + '十' + (o ? DIGITS[o] : '');
-}
-
 function eraOf(y) {
   const r = REIGNS.find(([a, b]) => y >= a && y <= b);
   if (!r) return '';
   const n = y - r[0] + 1;
-  return `${r[2]}${n === 1 ? '元' : cn(n)}年`;
+  return `${r[2]}${n === 1 ? '元' : cnNumber(n)}年`;
 }
 
 /* ── 铜尺 ─────────────────────────────────────── */
@@ -4268,7 +4337,7 @@ function startMarch(b) {
   const avg = b.steps.reduce((n, t) => n + t.length, 0) / b.steps.length;
   table.play(b, talk ? Math.max(1600, avg * 190) : 1250);
   document.body.classList.add('is-marching');
-  cap.hidden = false;
+  captionIn();
   cap.classList.remove('is-lore');
   $('capName').textContent = b.name;
   $('capYear').textContent = `${formatYear(b.year)} · ${eraOf(b.year)}`;
@@ -4291,7 +4360,7 @@ function endMarch(home = true) {
 // 讲解：把随年而来的事说在盘上，而不是只躺在左栏里
 function showLore(e) {
   endMarch();
-  cap.hidden = false;
+  captionIn();
   cap.classList.add('is-lore');
   cap.classList.remove('is-final');
   cap.style.setProperty('--seal', SEALS[e.kind] || 'var(--bronze)');
@@ -4302,12 +4371,37 @@ function showLore(e) {
   $('capDots').innerHTML = '';
 }
 
+let capTimer = 0;
+let restUntil = 0;
+
+// 上一条先退，退净了下一条才进；中间留一口气
+function captionOut(then) {
+  clearTimeout(capTimer);
+  if (cap.hidden) { then?.(); return 0; }
+  cap.classList.add('is-leaving');
+  capTimer = setTimeout(() => {
+    cap.hidden = true;
+    cap.classList.remove('is-leaving');
+    then?.();
+  }, 460);
+  return 460;
+}
+
+function captionIn() {
+  clearTimeout(capTimer);
+  cap.classList.remove('is-leaving');
+  cap.hidden = false;
+}
+
 function hideCaption() {
   endMarch();
   speech.hush();
+  clearTimeout(capTimer);
   cap.hidden = true;
+  cap.classList.remove('is-leaving');
   queue = [];
   loreUntil = 0;
+  restUntil = 0;
 }
 
 const NUMERALS = ['一', '二', '三', '四', '五', '六'];
@@ -4441,6 +4535,7 @@ function setYear(y, animate = true) {
     const war = evs.find((e) => e.battle);
     queue = evs.filter((e) => !e.battle);
     loreUntil = 0;
+    restUntil = 0;
     if (war) selectBattle(war.battle);
     else if (queue.length) nextLore(performance.now());
   }
@@ -4452,16 +4547,19 @@ let loreUntil = 0;
 function nextLore(now) {
   const e = queue.shift();
   if (!e) return;
-  showLore(e);
-  if (cinema && e.at) table.focusOn(e.at, 1.22, 2800);
-  if (playing) showAct();
-  const base = dwell(e);
-  loreUntil = now + base;
-  if (speech.enabled && speech.ready) {
-    // 念完再走；万一语音没回调，也有上限兜底
-    loreUntil = now + base * 3;
-    speech.say(`${e.title}。${e.text}`, () => { loreUntil = performance.now() + 500; });
-  }
+  // 镜头与退场同时起步，新的一条随镜头将定而入——这样衔接才不生硬
+  if (cinema && e.at) table.focusOn(e.at, 1.22, 2600);
+  const lead = captionOut(() => {
+    showLore(e);
+    if (playing) showAct();
+    const base = dwell(e);
+    loreUntil = performance.now() + base;
+    if (speech.enabled && speech.ready) {
+      loreUntil = performance.now() + base * 3;
+      speech.say(`${e.title}。${e.text}`, () => { loreUntil = performance.now() + 700; });
+    }
+  });
+  loreUntil = now + lead + dwell(e);
 }
 
 let toastTimer = 0;
@@ -4512,13 +4610,30 @@ function dwell(x) {
 const btnSound = $('btnSound');
 let soundReady = speech.probe();
 
+const voicePick = $('voicePick');
+
 function refreshSoundBtn() {
   soundReady = speech.ready;
   btnSound.disabled = !soundReady;
   btnSound.title = soundReady
     ? '朗读解说，战事落定敲一记编钟'
     : '此浏览器未提供中文语音，无法朗读';
+  // 合成嗓音的好坏因人因机而异，故把选择权交出去
+  const list = speech.voices();
+  voicePick.hidden = list.length < 2;
+  if (list.length >= 2 && voicePick.options.length !== list.length) {
+    voicePick.innerHTML = list
+      .map((v) => `<option value="${v.name}">${v.name.replace(/\s*\(.*\)$/, '')}</option>`)
+      .join('');
+    if (speech.voice) voicePick.value = speech.voice.name;
+  }
 }
+
+voicePick.addEventListener('change', () => {
+  speech.use(voicePick.value);
+  speech.hush();
+  if (speech.enabled) speech.say('戰國沙盤');
+});
 refreshSoundBtn();
 if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', refreshSoundBtn);
 
@@ -4567,9 +4682,14 @@ function frame(now) {
     } else if (queue.length) {
       nextLore(now);
       lastTick = now;
+    } else if (restUntil > now) {
+      lastTick = now;
+    } else if (!cap.hidden) {
+      captionOut();
+      restUntil = now + 620;
+      lastTick = now;
     } else if (now - lastTick > dwell(year)) {
       lastTick = now;
-      if (!cap.hidden) cap.hidden = true;
       if (year >= END) pause(); else setYear(year + 1);
     }
   }

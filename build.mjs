@@ -59,6 +59,13 @@ ${js}
 </script>
 `;
 
+// 各模块本有独立作用域，拼成单文件后顶层重名会静默相撞——构建时挡下
+const seen = new Map();
+for (const m of js.matchAll(/^(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)) {
+  if (seen.has(m[1])) throw new Error(`顶层标识符重复：${m[1]}（拼接后会相撞，请改名或抽为共用模块）`);
+  seen.set(m[1], true);
+}
+
 await mkdir(new URL('dist/', root), { recursive: true });
 await writeFile(new URL('dist/index.html', root), standalone);
 await writeFile(new URL('dist/artifact.html', root), artifact);
