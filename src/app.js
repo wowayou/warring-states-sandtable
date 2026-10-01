@@ -1,7 +1,10 @@
 import { SandTable } from './table.js';
 import { speech, chime } from './sound.js';
 import { REGIONS } from './atlas.js';
-import { STATES, SEVEN, EVENTS, BATTLES, CHANGES, BASE, ACTS, actAt, START, END, formatYear, cnNumber, ownerAt } from './history.js';
+import {
+  STATES, SEVEN, EVENTS, BATTLES, CHANGES, BASE, ACTS, KIND_NAME,
+  actAt, START, END, formatYear, dateOf, eraOf, ownerAt,
+} from './history.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('table');
@@ -12,23 +15,6 @@ let year = START;
 let playing = false;
 let lastTick = 0;
 const battleById = new Map(table.battles.map((b) => [b.id, b]));
-
-/* ── 纪年 ─────────────────────────────────────── */
-
-const REIGNS = [
-  [-475, -469, '周元王'], [-468, -442, '周贞定王'], [-441, -441, '周哀王'],
-  [-440, -426, '周考王'], [-425, -402, '周威烈王'], [-401, -376, '周安王'],
-  [-375, -369, '周烈王'], [-368, -321, '周显王'], [-320, -315, '周慎靓王'],
-  [-314, -256, '周赧王'], [-255, -251, '秦昭襄王'], [-250, -250, '秦孝文王'],
-  [-249, -247, '秦庄襄王'], [-246, -221, '秦王政'],
-];
-
-function eraOf(y) {
-  const r = REIGNS.find(([a, b]) => y >= a && y <= b);
-  if (!r) return '';
-  const n = y - r[0] + 1;
-  return `${r[2]}${n === 1 ? '元' : cnNumber(n)}年`;
-}
 
 /* ── 铜尺 ─────────────────────────────────────── */
 
@@ -52,7 +38,7 @@ function buildRuler() {
   }
   ticks.innerHTML = html;
   marks.innerHTML = BATTLES.map(
-    (b) => `<i class="mark" style="left:${pct(b.year)}%" title="${b.name}"></i>`
+    (b) => `<i class="mark" style="left:${pct(b.year)}%" title="${dateOf(b)} ${b.name}"></i>`
   ).join('');
 }
 
@@ -111,22 +97,56 @@ ruler.addEventListener('keydown', (e) => {
 
 function buildChron() {
   $('chron').innerHTML = EVENTS.map(
-    (e, i) => `<li class="evt" data-i="${i}" data-kind="${e.kind}" data-year="${e.year}"${e.battle ? ` data-battle="${e.battle}"` : ''}>
-      <span class="evt-year">${formatYear(e.year)}</span>
+    (e, i) => `<li class="evt" tabindex="-1" data-i="${i}" data-kind="${e.kind}" data-year="${e.year}"${e.battle ? ` data-battle="${e.battle}"` : ''}>
+      <span class="evt-year">${dateOf(e)}</span>
       <div class="evt-body">
-        <p class="evt-title"><i class="evt-kind">${e.kind}</i>${e.title}</p>
+        <p class="evt-title"><i class="evt-kind" title="${KIND_NAME[e.kind]}" aria-label="${KIND_NAME[e.kind]}">${e.kind}</i>${e.title}</p>
         <p class="evt-text">${e.text}</p>
       </div>
     </li>`
   ).join('');
 }
 
+let picked = null;
+
+// 点中的那一条要亮起来——同年往往不止一事，前479 的孔子卒更在纪年之外
+function pick(li) {
+  if (picked === li) return;
+  picked?.classList.remove('is-picked');
+  picked = li;
+  li?.classList.add('is-picked');
+}
+
+function openEvt(li) {
+  pause();
+  setYear(+li.dataset.year);
+  pick(li);
+  // 换年会把简册滚到当年那一段；点的是哪条，就让哪条留在眼前
+  li.scrollIntoView({ block: 'nearest' });
+  if (li.dataset.battle) selectBattle(li.dataset.battle, true);
+  else showEvent(EVENTS[+li.dataset.i]);
+}
+
 $('chron').addEventListener('click', (e) => {
   const li = e.target.closest('.evt');
-  if (!li) return;
-  pause();
-  if (li.dataset.battle) { setYear(+li.dataset.year); selectBattle(li.dataset.battle, true); }
-  else { setYear(+li.dataset.year); showEvent(EVENTS[+li.dataset.i]); }
+  if (li) openEvt(li);
+});
+
+// 键盘：上下移动、回车打开
+$('chron').addEventListener('keydown', (e) => {
+  const li = e.target.closest('.evt');
+  if (!li) {
+    if (['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) {
+      e.preventDefault();
+      (chronAnchor || $('chron').firstElementChild)?.focus();
+    }
+    return;
+  }
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEvt(li); }
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    (e.key === 'ArrowDown' ? li.nextElementSibling : li.previousElementSibling)?.focus();
+  }
 });
 
 let chronAnchor = null;
@@ -141,6 +161,7 @@ function syncChron() {
     li.classList.toggle('is-now', now);
     if (y <= year) anchor = li;
   }
+  if (picked && +picked.dataset.year !== year) pick(null);
   // 逐年重启平滑滚动会互相打断，只在当前条目真的换了才滚
   if (anchor && anchor !== chronAnchor && !scrubbing) {
     chronAnchor = anchor;
@@ -181,8 +202,12 @@ function powerRow(id) {
 }
 
 const goneNote = document.createElement('p');
-goneNote.className = 'dt-empty';
-goneNote.style.marginTop = '6px';
+goneNote.className = 'pw-gone';
+
+// 条长是估算，须当面说清，免得被当作史载兵数
+const powerNote = document.createElement('p');
+powerNote.className = 'pw-note';
+powerNote.textContent = '条长按所辖之地的田赋人口估算，示意消长，非史载兵数';
 
 function syncPower() {
   const power = table.power();
@@ -204,7 +229,8 @@ function syncPower() {
   for (const [id, v] of rows) {
     const row = powerRow(id);
     row.fill.style.width = `${(v / max) * 100}%`;
-    row.num.textContent = `${counts.get(id) || 0}郡 · 带甲${Math.round(v * 4.5)}万`;
+    row.num.textContent = `${counts.get(id) || 0} 地`;
+    row.el.title = `${STATES[id].name}：辖 ${counts.get(id) || 0} 地，分量 ${v.toFixed(1)}`;
   }
   const gone = SEVEN.filter((x) => !power.has(x) && RISEN.get(x) <= year);
   const unborn = SEVEN.filter((x) => !power.has(x) && !(RISEN.get(x) <= year));
@@ -217,6 +243,7 @@ function syncPower() {
   } else {
     goneNote.remove();
   }
+  powerBox.appendChild(powerNote);
 }
 
 /* ── 案上 ─────────────────────────────────────── */
@@ -239,7 +266,7 @@ function showAct() {
     <p class="dt-val">${a.thesis}</p>
     <div class="dt-row" style="margin-top:14px"><p class="dt-key">本幕战事</p>
       <ul class="dt-wars">${wars.map((b) =>
-        `<li><button data-battle="${b.id}"><i>${formatYear(b.year)}</i>${b.name}</button></li>`).join('')}</ul></div>`;
+        `<li><button data-battle="${b.id}"><i>${dateOf(b)}</i>${b.name}</button></li>`).join('')}</ul></div>`;
 }
 
 function showEvent(e, narrate = true) {
@@ -247,9 +274,9 @@ function showEvent(e, narrate = true) {
   actShown = null;
   table.selected = null;
   if (narrate) showLore(e); else endMarch();
-  detail.innerHTML = `<p class="dt-eyebrow">${e.kind === '变' ? '变法' : e.kind === '纵' ? '纵横' : e.kind === '并' ? '兼并' : '迁都'}</p>
+  detail.innerHTML = `<p class="dt-eyebrow">${KIND_NAME[e.kind]}</p>
     <p class="dt-title">${e.title}</p>
-    <p class="dt-sub">${formatYear(e.year)} · ${eraOf(e.year)}</p>
+    <p class="dt-sub">${dateOf(e)} · ${eraOf(e.year)}</p>
     <p class="dt-val">${e.text}</p>`;
 }
 
@@ -269,9 +296,9 @@ function showRegion(i) {
     <p class="dt-title">${r.name}</p>
     <p class="dt-sub">${formatYear(year)} 属 ${st.name}</p>
     <div class="dt-row"><p class="dt-key">易主</p>
-      <p class="dt-val">${hist.map((h) => `${formatYear(h.y)} <strong style="color:${STATES[h.o].ink || STATES[h.o].color}">${STATES[h.o].name}</strong>`).join(' → ')}</p></div>
+      <p class="dt-val">${hist.map((h) => `${dateOf(CHANGES.find((c) => c.year === h.y) || { year: h.y })} <strong style="color:${STATES[h.o].ink || STATES[h.o].color}">${STATES[h.o].name}</strong>`).join(' → ')}</p></div>
     <div class="dt-row"><p class="dt-key">分量</p>
-      <p class="dt-val">田赋人口之厚薄计 <strong>${r.weight.toFixed(1)}</strong>，约当带甲 ${Math.round(r.weight * 4.5)} 万</p></div>`;
+      <p class="dt-val">按田赋人口之厚薄估作 <strong>${r.weight.toFixed(1)}</strong>（关中计 2.0）。示意之数，非史载</p></div>`;
 }
 
 function selectBattle(id, scroll = false) {
@@ -283,7 +310,7 @@ function selectBattle(id, scroll = false) {
   if (year !== b.year) setYear(b.year);
   detail.innerHTML = `<p class="dt-eyebrow">战</p>
     <p class="dt-title is-war">${b.name}</p>
-    <p class="dt-sub">${formatYear(b.year)} · ${eraOf(b.year)}</p>
+    <p class="dt-sub">${dateOf(b)} · ${eraOf(b.year)}</p>
     <div class="dt-row"><p class="dt-key">形势</p><p class="dt-val">${b.sides}</p></div>
     <div class="dt-row"><p class="dt-key">兵力</p><p class="dt-val">${b.force}</p></div>
     <div class="dt-row"><p class="dt-key">结局</p><p class="dt-val">${b.result}</p></div>
@@ -317,7 +344,7 @@ function startMarch(b) {
   captionIn();
   cap.classList.remove('is-lore');
   $('capName').textContent = b.name;
-  $('capYear').textContent = `${formatYear(b.year)} · ${eraOf(b.year)}`;
+  $('capYear').textContent = `${dateOf(b)} · ${eraOf(b.year)}`;
   $('capDots').innerHTML = b.steps.map(() => '<i></i>').join('');
   syncCaption(true);
 }
@@ -342,7 +369,7 @@ function showLore(e) {
   cap.classList.remove('is-final');
   cap.style.setProperty('--seal', SEALS[e.kind] || 'var(--bronze)');
   $('capName').textContent = e.title;
-  $('capYear').textContent = `${formatYear(e.year)} · ${eraOf(e.year)}`;
+  $('capYear').textContent = `${dateOf(e)} · ${eraOf(e.year)}`;
   $('capNo').textContent = e.kind;
   $('capText').textContent = e.text;
   $('capDots').innerHTML = '';
@@ -506,7 +533,7 @@ function setYear(y, animate = true) {
   syncCine();
   if (detailMode === 'act') showAct();
   const change = CHANGES.find((c) => c.year === year && c.note);
-  if (change && animate) showToast(`${formatYear(year)} · ${change.note}`);
+  if (change && animate) showToast(`${dateOf(change)} · ${change.note}`);
   if (playing) {
     const evs = EVENTS.filter((e) => e.year === year);
     const war = evs.find((e) => e.battle);
@@ -728,7 +755,7 @@ canvas.addEventListener('pointermove', (e) => {
     table.hover = null;
     canvas.style.cursor = 'pointer';
     tip.hidden = false;
-    tip.innerHTML = `<b>${b.name}</b> <span>${formatYear(b.year)}</span>`;
+    tip.innerHTML = `<b>${b.name}</b> <span>${dateOf(b)}</span>`;
     placeTip(px, py);
     return;
   }
@@ -791,7 +818,7 @@ for (const chip of document.querySelectorAll('.chip')) {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (e.target.closest('.ruler')) return;
+  if (e.defaultPrevented || e.target.closest('.ruler')) return;
   if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); toggle(); }
 });
 
@@ -800,6 +827,11 @@ new ResizeObserver(() => table.resize()).observe(stage);
 /* ── 启程 ─────────────────────────────────────── */
 
 if (document.fonts) document.fonts.load('700 24px "Sandtable Serif"').catch(() => {});
+
+// 触屏上没有滚轮
+if (window.matchMedia?.('(pointer: coarse)').matches) {
+  $('hint').textContent = '双指缩放 · 拖动移图 · 点朱砂十字看战事';
+}
 
 buildRuler();
 buildChron();

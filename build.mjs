@@ -29,6 +29,8 @@ const bodyOnly = html
   .trim();
 
 const title = '戰國沙盤 · 先秦形勢演變';
+const icon = html.match(/<link rel="icon"[^>]*>/)?.[0] ?? '';
+const description = html.match(/<meta name="description"[^>]*>/)?.[0] ?? '';
 
 const standalone = `<!doctype html>
 <html lang="zh-Hans">
@@ -36,6 +38,8 @@ const standalone = `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>${title}</title>
+${description}
+${icon}
 <style>
 ${css}
 </style>

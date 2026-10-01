@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>戰國沙盤 · 先秦形勢演變</title>
 <meta name="description" content="前475—前221，二百五十四年列国形势与战事的青铜沙盘推演。" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%224%22 fill=%22%23121a19%22/%3E%3Crect x=%224.5%22 y=%224.5%22 width=%2223%22 height=%2223%22 fill=%22none%22 stroke=%22%23c9a227%22 stroke-width=%222%22/%3E%3Cpath d=%22M10 10l12 12M22 10L10 22%22 stroke=%22%23c8352b%22 stroke-width=%223.2%22 stroke-linecap=%22round%22/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="src/style.css" />
 </head>
 <body>
@@ -20,12 +21,12 @@
       <span class="rail-year-tag" id="yearTag">周元王元年</span>
     </div>
     <nav class="rail-layers" aria-label="图层">
-      <button class="chip is-on" data-layer="relief">山川起伏</button>
-      <button class="chip is-on" data-layer="rivers">水系</button>
-      <button class="chip is-on" data-layer="walls">长城</button>
-      <button class="chip is-on" data-layer="passes">关塞</button>
-      <button class="chip is-on" data-layer="battles">战事</button>
-      <button class="chip is-on" data-layer="labels">国名</button>
+      <button class="chip is-on" data-layer="relief" aria-pressed="true">山川起伏</button>
+      <button class="chip is-on" data-layer="rivers" aria-pressed="true">水系</button>
+      <button class="chip is-on" data-layer="walls" aria-pressed="true">长城</button>
+      <button class="chip is-on" data-layer="passes" aria-pressed="true">关塞</button>
+      <button class="chip is-on" data-layer="battles" aria-pressed="true">战事</button>
+      <button class="chip is-on" data-layer="labels" aria-pressed="true">国名</button>
     </nav>
   </header>
 
@@ -44,7 +45,7 @@
           <span class="caption-year" id="capYear"></span>
           <button class="caption-close" id="capClose" aria-label="退出推演">收</button>
         </div>
-        <p class="caption-line"><span class="caption-no" id="capNo">一</span><span id="capText"></span></p>
+        <p class="caption-line" aria-live="polite"><span class="caption-no" id="capNo">一</span><span id="capText"></span></p>
         <div class="caption-dots" id="capDots"></div>
       </div>
       <div class="stage-hint" id="hint">滚轮缩放 · 拖动移图 · 点朱砂十字看战事</div>
