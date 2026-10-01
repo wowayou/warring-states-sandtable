@@ -255,9 +255,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .evt.is-past { opacity: 1; }
 .evt:hover { background: rgba(232, 226, 210, 0.05); }
+.evt:focus-visible { outline-offset: -2px; }
 
 .evt.is-now {
-  background: rgba(200, 53, 43, 0.1);
+  background: rgba(200, 53, 43, 0.08);
+  border-left-color: rgba(200, 53, 43, 0.6);
+}
+
+/* 点中的那一条：同年不止一事时，它与旁的分得开 */
+.evt.is-picked {
+  opacity: 1;
+  background: rgba(200, 53, 43, 0.16);
   border-left-color: var(--cinnabar);
 }
 
@@ -311,7 +319,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .evt[data-kind="工"] { --seal: #a8845c; }
 
 .evt-text {
-  display: none;
   margin: 3px 0 0;
   font-size: 12px;
   line-height: 1.62;
@@ -322,9 +329,13 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   overflow: hidden;
 }
 
+.evt:hover .evt-text { color: var(--bone-2); }
+
+/* 当年之事全文展开，不必再去案上找后半句 */
 .evt.is-now .evt-text,
-.evt:hover .evt-text {
-  display: -webkit-box;
+.evt.is-picked .evt-text {
+  display: block;
+  overflow: visible;
   color: var(--bone-2);
 }
 
@@ -372,6 +383,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 .pw.is-gone { opacity: 0.28; }
+
+.pw-gone { margin: 4px 0 0; font-size: 12px; color: var(--bone-3); }
+
+.pw-note {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  color: rgba(232, 226, 210, 0.26);
+}
 
 /* 案上：详情 */
 
@@ -913,7 +934,17 @@ body.is-marching .stage-hint { opacity: 0; }
   .panel-left, .panel-right { border: 0; border-top: 1px solid var(--patina-edge); }
   .chron { max-height: 300px; }
   .detail { max-height: 340px; }
-  .ruler-wrap { position: sticky; bottom: 0; z-index: 10; padding: 0 12px 4px; gap: 8px; }
+  .ruler-wrap {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 8px 14px 4px;
+    gap: 2px;
+  }
+  .controls { flex-wrap: wrap; gap: 6px; }
+  .ruler { height: 58px; }
+  .disclaimer { margin: 0 0 4px; font-size: 10px; letter-spacing: 0.02em; }
   .play { padding: 7px 10px; }
   .play-text { letter-spacing: 0.1em; text-indent: 0.1em; }
   .speed { padding: 5px 6px; letter-spacing: 0.04em; }
@@ -967,6 +998,7 @@ body.is-cinema #table { filter: saturate(0.86) contrast(1.07) brightness(0.98); 
 
 body.is-cinema .stage::after {
   background:
+    radial-gradient(64% 46% at 0% 100%, rgba(4, 6, 7, 0.78), transparent 72%),
     radial-gradient(126% 88% at 50% 45%, transparent 38%, rgba(0, 0, 0, 0.62) 100%),
     linear-gradient(180deg, rgba(4, 6, 7, 0.82), transparent 15%),
     linear-gradient(0deg, rgba(4, 6, 7, 0.88), transparent 30%);

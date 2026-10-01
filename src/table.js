@@ -263,10 +263,17 @@ export class SandTable {
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = this.canvas.getBoundingClientRect();
-    this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
-    this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    // 尺寸未变则什么都不做：给 canvas.width 赋值哪怕是同一个数也会清空画布，
+    // 而缓存键未变，下一帧便不会重画——开页时 ResizeObserver 的首次回调正是这样把盘面清成一片黑
+    if (this.css && w === this.canvas.width && h === this.canvas.height && dpr === this.dpr) return;
+    this.canvas.width = w;
+    this.canvas.height = h;
     this.dpr = dpr;
     this.css = { w: rect.width, h: rect.height };
+    this.boardCacheKey = null;
+    this.dirty = true;
     this.fit();
   }
 
@@ -1051,14 +1058,16 @@ export class SandTable {
       ctx.fill();
       ctx.restore();
       if (m.label) {
+        // 标签随军走在已画路径的六成处，而不贴着箭头：几路军汇于一点时，标签才不叠成一团
+        const at = seg[Math.min(seg.length - 1, Math.floor((seg.length - 1) * 0.6))];
         ctx.font = `700 12px ${SERIF}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.lineWidth = 3;
         ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-        ctx.strokeText(m.label, head.x, head.y - 9);
+        ctx.strokeText(m.label, at.x, at.y - 7);
         ctx.fillStyle = ink;
-        ctx.fillText(m.label, head.x, head.y - 9);
+        ctx.fillText(m.label, at.x, at.y - 7);
       }
     });
     const tailStart = (pb.total - pb.tail) / pb.total;
@@ -1184,7 +1193,7 @@ export class SandTable {
     const len = km * pxPerKm;
     // 放映时字幕占着左下角，比例尺让到右边
     const x = this.cinema ? this.css.w - 26 - len : 22;
-    const y = this.css.h - (this.cinema ? 26 : 44);
+    const y = this.css.h - (this.cinema ? 26 : 52);
     ctx.save();
     ctx.strokeStyle = 'rgba(201,162,39,0.8)';
     ctx.lineWidth = 1.3;
