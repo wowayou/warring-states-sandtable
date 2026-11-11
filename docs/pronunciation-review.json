@@ -1,0 +1,74 @@
+[
+  {
+    "id": "battle-yinjin-step-1",
+    "sha256": "a08b8b5fdab53866dd1180ea355c2679de577834de26201fc30d952f88116639",
+    "text": "秦师东出，压至阴晋",
+    "term": "阴晋",
+    "expectedReading": "yīn jìn",
+    "reason": "两份转写将“阴”写成燕/烟；两次合成均已完成，剩余差异可能是沙哑声线的前后鼻音或识别误差，不能自动断言发音正确。",
+    "status": "needs-human-review"
+  },
+  {
+    "id": "battle-shaoliang-step-2",
+    "sha256": "a9cc3ef8c03d3ea0bd19fa12c16db1f8ce836f36c28fdae0e55f3cdc85527ef8",
+    "text": "魏公孙痤自安邑西援",
+    "term": "公孙痤",
+    "expectedReading": "gōng sūn cuó",
+    "reason": "首、次版本分别被转写成策/卓；无稳定证据说明哪次能消除生僻人名疑点，保留首版，留待听审。",
+    "status": "needs-human-review"
+  },
+  {
+    "id": "battle-guiling-step-2",
+    "sha256": "2cb03913abf38589dad3aa533df19bd85275b8d732747ad0f0f0e485e102c5f0",
+    "text": "孙膑不救赵而直趋大梁，设伏于桂陵",
+    "term": "孙膑",
+    "expectedReading": "sūn bìn",
+    "reason": "首版保留完整桂陵地名，优于次版；孙膑仍在转写中出现并/病，保留局部听审提示，未被总分掩盖。",
+    "status": "needs-human-review"
+  },
+  {
+    "id": "battle-hanguu318-step-1",
+    "sha256": "1192dd2993499567b01409972bed4e371b32667eb135a95c7ae688fcc73b0a5b",
+    "text": "魏师西出，压至函谷关",
+    "term": "函谷关",
+    "expectedReading": "hán gǔ guān",
+    "reason": "次版恢复函谷音节，关仍被写成文/温；完整句意和其余词可核对，地名末字需真人确认。",
+    "status": "needs-human-review"
+  },
+  {
+    "id": "battle-xiuyu-step-1",
+    "sha256": "607b3ffe29b6dbc1d771807542563d8ce50d9fab0f4b89bf1c00b8aca412315b",
+    "text": "樗里疾出函谷东进",
+    "term": "函谷东进",
+    "expectedReading": "hán gǔ dōng jìn",
+    "reason": "保留末句东进更完整的首版；函谷被一份识别写成韩国，另一份保留韩股，同音/近音差异不能证明正确。",
+    "status": "needs-human-review"
+  },
+  {
+    "id": "battle-handan-step-3",
+    "sha256": "6073b81abe3c3b70e6a786faaa5aaabbf06b60096967021ed31cac69a26d7346",
+    "text": "春申君之师亦自陈北来",
+    "term": "春申君",
+    "expectedReading": "chūn shēn jūn",
+    "reason": "次版恢复了首版缺失于转写的陈北来结尾；春申君起音被两份识别拆成出日深，可能是连读，留待听审。",
+    "status": "needs-human-review"
+  },
+  {
+    "id": "battle-heiwai-step-2",
+    "sha256": "af217eaf6f6c4e33c52b08a2fda6e3803b2c62f6705d20f60bf0aa1db0575595",
+    "text": "蒙骜之军退保函谷",
+    "term": "函谷",
+    "expectedReading": "hán gǔ",
+    "reason": "次版蒙骜人名已恢复，函谷仍在转写中出现韩国；没有截断或整句缺失，保留地名听审提示。",
+    "status": "needs-human-review"
+  },
+  {
+    "id": "battle-limu-step-2",
+    "sha256": "339375af07fa085320d56b7070e9b0b5345623fa2038daa678b0026417131532",
+    "text": "李牧纵民畜牧于野，以车骑正面当之",
+    "term": "以车骑正面当之",
+    "expectedReading": "yǐ chē qí zhèng miàn dāng zhī",
+    "reason": "次版保留了原先未被转写识别的句尾“之”；车骑/正面的辅音在两份识别中有近音差异，需听审。",
+    "status": "needs-human-review"
+  }
+]

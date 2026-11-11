@@ -3,6 +3,19 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    paths:
+      - 'index.html'
+      - 'src/**'
+      - 'assets/**'
+      - 'docs/pronunciation-review.json'
+      - 'build.mjs'
+      - 'tools/build-sharing-pages.mjs'
+      - 'tools/verify-voice.mjs'
+      - 'tools/verify-voice-options.mjs'
+      - 'tools/verify-dist.mjs'
+      - 'test/*.test.mjs'
+      - 'package*.json'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -16,17 +29,25 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main' && github.event.repository.private == false
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: actions/configure-pages@v5
-      - name: Rebuild single-file bundle
+      - name: Test playback and release safeguards
+        run: npm test
+      - name: Build and verify the public file allowlist (maximum 25 MiB)
         run: node build.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist
+          retention-days: 1
       - id: deploy
         uses: actions/deploy-pages@v4

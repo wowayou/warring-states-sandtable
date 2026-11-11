@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 const root = new URL('../', import.meta.url);
 
-const SOURCES = ['src/history.js', 'src/atlas.js', 'src/app.js', 'src/table.js', 'index.html', 'src/style.css'];
+const SOURCES = ['src/history.js', 'src/atlas.js', 'src/app.js', 'src/player.js', 'src/narration.js', 'src/storyboard.js', 'src/table.js', 'index.html', 'src/style.css'];
 // 运行时拼出来的字，源码里未必成串出现
 const EXTRA = '〇一二三四五六七八九十百千万前年周秦楚齐赵魏韩燕晋越宋鲁郑卫吴巴蜀代中山义渠林胡楼烦匈奴东月氏羌百夷滇夜郎朝鲜郡带甲已亡幕第战变纵并都学工地易主分量约当田赋人口之厚薄计读法先看盘再本事收复位';
 

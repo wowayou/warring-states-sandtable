@@ -32,12 +32,13 @@
 
   <main class="board">
     <aside class="panel panel-left">
-      <div class="panel-head"><span>大事記</span></div>
+      <button class="panel-head panel-toggle" id="btnChronPanel" aria-expanded="true" aria-controls="chron"><span>大事記</span><span class="panel-toggle-mark" aria-hidden="true">−</span></button>
       <ol class="chron" id="chron" tabindex="0" aria-label="大事记"></ol>
     </aside>
 
     <section class="stage">
       <canvas id="table" aria-label="战国形势沙盘"></canvas>
+      <span class="voice-disclosure">AI合成讲解 · 非本人原录音</span>
       <div class="toast" id="toast" hidden></div>
       <div class="caption" id="caption" hidden>
         <div class="caption-head">
@@ -46,7 +47,12 @@
           <button class="caption-close" id="capClose" aria-label="退出推演">收</button>
         </div>
         <p class="caption-line" aria-live="polite"><span class="caption-no" id="capNo">一</span><span id="capText"></span></p>
-        <div class="caption-dots" id="capDots"></div>
+        <div class="caption-dots" id="capDots" role="group" aria-label="战役步骤"></div>
+      </div>
+      <div class="audio-error" id="audioError" role="alert" hidden>
+        <p id="audioErrorText"></p>
+        <button class="speed" id="btnRetry">重试</button>
+        <button class="speed" id="btnSilent">无声继续</button>
       </div>
       <div class="stage-hint" id="hint">滚轮缩放 · 拖动移图 · 点朱砂十字看战事</div>
       <div class="stage-tools">
@@ -78,9 +84,9 @@
     </section>
 
     <aside class="panel panel-right">
-      <div class="panel-head"><span>國力</span></div>
-      <div class="power" id="power"></div>
-      <div class="panel-head panel-head-mid"><span>案上</span></div>
+      <details class="power-disclosure" open><summary class="panel-head"><span>國力</span></summary>
+      <div class="power" id="power"></div></details>
+      <button class="panel-head panel-head-mid panel-toggle" id="btnDetailPanel" aria-expanded="true" aria-controls="detail"><span>案上</span><span class="panel-toggle-mark" aria-hidden="true">−</span></button>
       <div class="detail" id="detail"></div>
     </aside>
   </main>
@@ -90,10 +96,23 @@
     <button class="play" id="btnPlay" aria-label="自动推演纪年">
       <span class="play-icon" id="playIcon">▶</span><span class="play-text" id="playText">推演</span>
     </button>
-    <button class="speed" id="btnSpeed" aria-pressed="false" title="解说停留时长减半">倍速</button>
-    <button class="speed" id="btnSound" aria-pressed="false" title="朗读解说，战事落定敲一记编钟">朗读</button>
-    <select class="voice" id="voicePick" hidden aria-label="朗读嗓音"></select>
-    <button class="speed cine-btn" id="btnCinema" title="放映：藏起两侧，镜头随解说游走">放映</button>
+    <button class="speed" id="btnPrev" aria-label="上一事件">上一条</button>
+    <button class="speed" id="btnNext" aria-label="下一事件">下一条</button>
+    <select class="voice" id="btnSpeed" aria-label="播放速度">
+      <option value="0.75">0.75×</option><option value="1" selected>1×</option>
+      <option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+    </select>
+    <button class="speed" id="btnSound" aria-pressed="true" title="本地生成的 AI 配音，可切换无声演示">配音开</button>
+    <a class="speed" id="btnVoiceOptions" href="voices/index.html" target="_blank" rel="noopener" title="新标签页试听其他声线；保留当前讲解进度">配音试听</a>
+    <button class="speed cine-btn" id="btnCinema" aria-pressed="false" title="放映：隐藏两侧，保留讲解进度">放映</button>
+    </div>
+    <div class="listening">
+      <button class="speed" id="btnReplay" disabled>重听本段</button>
+      <input id="clipSeek" type="range" min="0" max="1" step="0.05" value="0" aria-label="当前讲解片段进度" disabled />
+      <span id="clipTime">0:00 / 0:00</span>
+      <button class="speed" id="btnReturn" hidden>返回讲解</button>
+      <button class="speed" id="btnFromHere" hidden>从此处推演</button>
+      <span id="playStatus" role="status">点击推演开始讲解</span>
     </div>
     <div class="ruler" id="ruler" role="slider" tabindex="0"
          aria-label="纪年" aria-valuemin="-475" aria-valuemax="-221" aria-valuenow="-475" aria-valuetext="前475年">
@@ -102,7 +121,7 @@
       <div class="ruler-marks" id="marks"></div>
       <div class="ruler-cursor" id="cursor"><span class="ruler-cursor-year" id="cursorYear">前475</span></div>
     </div>
-    <p class="disclaimer">疆域依主流复原图概貌化，以事件为界分段切换，非逐年精确</p>
+    <p class="disclaimer">疆域为概貌示意，非逐年精确 · 配音为 AI 合成 · <a id="btnVoiceReview" href="review/index.html" target="_blank" rel="noopener">8处读音待听审</a></p>
   </footer>
 
 </div>

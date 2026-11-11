@@ -1,0 +1,19 @@
+{
+  "name": "warring-states-sandtable",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:browser": "node test/browser-smoke.mjs",
+    "voice:prepare": "node tools/prepare-voice.mjs",
+    "voice:verify": "node tools/verify-voice.mjs",
+    "voice:options:verify": "node tools/verify-voice-options.mjs",
+    "test:voice-options": "node test/voice-options-browser.mjs",
+    "dist:verify": "node tools/verify-dist.mjs",
+    "build": "node build.mjs",
+    "package": "python3 tools/package-release.py"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

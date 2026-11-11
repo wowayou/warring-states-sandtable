@@ -22,5 +22,6 @@ SOFTWARE.
 
 ---
 
-assets/display.woff2 is a subset of Noto Serif CJK SC, (c) Google and
-contributors, licensed under the SIL Open Font License 1.1. See assets/README.md.
+assets/display.woff2 is a subset of Noto Serif CJK SC, a Google / Adobe
+collaboration. The bundled font metadata credits (c) 2017-2023 Adobe.
+Licensed under the SIL Open Font License 1.1. See assets/OFL.txt and assets/README.md.

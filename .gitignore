@@ -1,2 +1,13 @@
 node_modules/
 .DS_Store
+
+work/
+release/
+dist/assets/voice/
+dist/assets/voice-options/
+dist/voices/
+dist/review/
+dist/build-info.json
+dist/assets/OFL.txt
+dist/LICENSE
+__pycache__/

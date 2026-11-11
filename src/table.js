@@ -44,7 +44,9 @@ export class SandTable {
     this.selected = null;
     this.view = { scale: 1, x: 0, y: 0 };
     this.dirty = true;
-    this.reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    this.reduced = motionPreference?.matches || false;
+    motionPreference?.addEventListener('change', (event) => { this.reduced = event.matches; this.dirty = true; });
     this.build();
   }
 
@@ -279,6 +281,7 @@ export class SandTable {
 
   fit() {
     if (!this.css) return;
+    this.hasPrev = false; this.morph = 1;
     this.cam = null;
     this.driftAnchor = null;
     const pad = 20;
@@ -303,6 +306,7 @@ export class SandTable {
 
   zoomAt(px, py, factor) {
     this.cam = null;
+    this.hasPrev = false; this.morph = 1;
     const before = this.toWorld(px, py);
     this.view.scale = Math.max(0.8, Math.min(7, this.view.scale * factor));
     const after = this.toWorld(px, py);
@@ -313,6 +317,7 @@ export class SandTable {
 
   pan(dx, dy) {
     this.cam = null;
+    this.hasPrev = false; this.morph = 1;
     this.view.x += dx;
     this.view.y += dy;
   }
@@ -326,7 +331,7 @@ export class SandTable {
     if (animate && still && moved.length && this.snapshotBoard()) { this.morph = 0; this.hasPrev = true; }
     else { this.morph = 1; this.hasPrev = false; }
     this.year = year;
-    this.flash = animate && moved.length ? { idx: moved, start: performance.now() } : null;
+    this.flash = animate && moved.length ? { idx: moved, start: this.clock || 0 } : null;
     return moved;
   }
 
@@ -354,23 +359,48 @@ export class SandTable {
     return best;
   }
 
-  play(battle, per = 1250) {
-    const n = battle.marchers.length;
+  play(battle) {
     const pts = [battle.at, ...battle.marchers.flatMap((m) => m.pts)];
     this.flyTo(boundsOf(pts));
-    // 等镜头落定再起兵，否则画面一边推近一边画箭头，看着晕
-    const wait = this.cam ? CAM_MS + 120 : 0;
-    this.playback = {
-      battle, t: 0, step: 0, start: performance.now() + wait,
-      per, tail: 1900, total: n * per + 1900,
-    };
+    // Opening narration leaves time for the camera. Route progress comes
+    // exclusively from the transport, including after a backward seek.
+    this.playback = { battle, step: -1, progress: 0 };
   }
 
   stop() { this.playback = null; }
 
+  // Camera position is a pure function of the active sentence and audio time.
+  // Seeking backwards restores its view; paused / buffering audio holds still.
+  presentNarration(cue) {
+    if (!cue || !this.css) { this.narrationCue = null; return; }
+    const viewFor = (targets, push) => {
+      const pts = targets.map((p) => project([p.lon, p.lat]));
+      const box = boundsOf(pts);
+      const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+      const wide = targets.some((p) => p.wide);
+      const fit = Math.min(this.css.w * .55 / Math.max(150, box.x1 - box.x0), this.css.h * .48 / Math.max(140, box.h)) / this.base;
+      const scale = Math.min(wide ? 1.3 : 2.15, Math.max(1, fit)) * (1 + push);
+      const s = this.base * scale;
+      return { scale, x: this.css.w * .5 - cx * s, y: this.css.h * .42 - cy * s };
+    };
+    const progress = Math.max(0, Math.min(1, cue.elapsed / cue.duration));
+    const from = viewFor(cue.from, cue.index ? .09 : 0);
+    const to = viewFor(cue.targets, this.reduced ? 0 : .09 * progress);
+    const blend = this.reduced ? 1 : ease(Math.min(1, cue.elapsed / Math.min(1.8, cue.duration * .35)));
+    for (const key of ['scale', 'x', 'y']) this.view[key] = from[key] + (to[key] - from[key]) * blend;
+    this.cam = null;
+    this.stopDrift();
+    this.hasPrev = false; this.morph = 1;
+    this.narrationCue = cue;
+    this.dirty = true;
+  }
+
+  clearNarration() { this.narrationCue = null; this.dirty = true; }
+
   // 缓缓移向所讲之处，而非跳过去
   focusOn(lonlat, scale = 1.5, dur = 2400) {
     if (!this.css) return;
+    this.hasPrev = false; this.morph = 1;
     const p = project(lonlat);
     const s = this.base * scale;
     const f = this.focus;
@@ -383,7 +413,7 @@ export class SandTable {
     this.cam = {
       from: { ...this.view },
       to: { scale, x: this.css.w / 2 - cx * s, y: this.css.h / 2 - cy * s },
-      start: performance.now(),
+      start: this.clock || 0,
       dur,
     };
     this.driftAnchor = null;
@@ -413,6 +443,7 @@ export class SandTable {
   // 推演毕，镜头退回全景，否则接下来的年份都困在战场里
   flyHome() {
     if (!this.css) return;
+    this.hasPrev = false; this.morph = 1;
     const s = this.base;
     this.cam = {
       from: { ...this.view },
@@ -421,14 +452,15 @@ export class SandTable {
         x: (this.css.w - this.focus.w * s) / 2 - this.focus.x0 * s,
         y: (this.css.h - this.focus.h * s) / 2 - this.focus.y0 * s,
       },
-      start: performance.now(),
+      start: this.clock || 0,
       dur: CAM_MS,
     };
     if (this.reduced) { Object.assign(this.view, this.cam.to); this.cam = null; this.dirty = true; }
   }
 
   // 推演时把镜头压到战场上，否则行军只是几根短线
-  flyTo(box, now = performance.now()) {
+  flyTo(box, now = this.clock || 0) {
+    this.hasPrev = false; this.morph = 1;
     const w = Math.max(box.x1 - box.x0, 1);
     const h = Math.max(box.y1 - box.y0, 1);
     const want = Math.min((this.css.w * 0.46) / w, (this.css.h * 0.5) / h) / this.base;
@@ -501,7 +533,8 @@ export class SandTable {
   }
 
   animating() {
-    if (this.morph < 1 || this.cam || this.playback || this.flash || this.drifting) return true;
+    if (this.frozen) return false;
+    if (this.morph < 1 || this.cam || this.playback || this.flash || this.drifting || this.narrationCue) return true;
     if (this.cinema && !this.reduced) return true;
     if (this.reduced || !this.layers.battles) return false;
     if (this.selected) return true;
@@ -510,11 +543,11 @@ export class SandTable {
 
   draw(now) {
     if (!this.css) return;
-    if (this.morph < 1) {
+    if (this.morph < 1 && !this.frozen) {
       this.morph = Math.min(1, this.morph + 0.05);
       if (this.morph >= 1) this.hasPrev = false;
     }
-    if (this.cam) {
+    if (this.cam && !this.frozen) {
       const k = ease(Math.min(1, (now - this.cam.start) / this.cam.dur));
       const { from, to } = this.cam;
       this.view.scale = from.scale + (to.scale - from.scale) * k;
@@ -522,7 +555,7 @@ export class SandTable {
       this.view.y = from.y + (to.y - from.y) * k;
       if (k >= 1) { this.cam = null; this.driftAnchor = null; }
     }
-    this.applyDrift(now);
+    if (!this.frozen) this.applyDrift(now);
 
     const key = this.boardKey();
     const boardStale = key !== this.boardCacheKey;
@@ -530,7 +563,7 @@ export class SandTable {
     this.dirty = false;
 
     // 视角在缓动时，先缩放缓存那张，按节流重绘，免得逐帧全量重画
-    const throttle = this.scrubbing ? 95 : this.drifting ? 380 : 0;
+    const throttle = this.frozen ? 0 : this.scrubbing ? 95 : this.drifting || this.narrationCue ? 280 : 0;
     const held = throttle > 0 && this.board && now - (this.lastBoardAt || 0) < throttle;
     const glide = this.board && this.boardView && (this.cam || (boardStale && held));
     if (boardStale && !this.cam && !held) {
@@ -541,8 +574,11 @@ export class SandTable {
 
     const ctx = this.ctx;
     ctx.save();
+    // CSS dimensions may be fractional while the backing bitmap is rounded.
+    // Clear all physical pixels so the last column cannot retain prior views.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.scale(this.dpr, this.dpr);
-    ctx.clearRect(0, 0, this.css.w, this.css.h);
     if (glide) {
       const k = this.view.scale / this.boardView.scale;
       ctx.save();
@@ -568,6 +604,7 @@ export class SandTable {
 
     if (this.layers.battles) this.drawBattles(ctx, now);
     if (this.playback) this.drawPlayback(ctx, now);
+    if (this.narrationCue) this.drawNarration(ctx);
 
     if (!this.cinema) {
       this.drawPlate(ctx);
@@ -1017,16 +1054,13 @@ export class SandTable {
 
   drawPlayback(ctx, now) {
     const pb = this.playback;
-    const elapsed = now - pb.start;
-    if (elapsed <= 0) return;
-    pb.t = Math.min(1, elapsed / pb.total);
-    pb.step = Math.min(pb.battle.marchers.length, Math.floor(elapsed / pb.per));
+    if (pb.step < 0) return;
     const b = pb.battle;
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     b.marchers.forEach((m, idx) => {
-      const t = Math.max(0, Math.min(1, (elapsed - idx * pb.per) / pb.per));
+      const t = idx < pb.step ? 1 : idx === pb.step ? (this.reduced ? 1 : pb.progress) : 0;
       if (t <= 0) return;
       const live = idx === pb.step || pb.step >= b.marchers.length;
       const pts = m.pts.map((p) => this.toScreen(p));
@@ -1070,15 +1104,61 @@ export class SandTable {
         ctx.fillText(m.label, at.x, at.y - 7);
       }
     });
-    const tailStart = (pb.total - pb.tail) / pb.total;
-    if (pb.t > tailStart) {
+    if (pb.step >= b.marchers.length && !this.reduced) {
       const p = this.toScreen(b.at);
-      const k = (pb.t - tailStart) / (1 - tailStart);
+      const k = pb.progress;
       ctx.beginPath();
       ctx.arc(p.x, p.y, 6 + 34 * k, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(200,53,43,${0.75 * (1 - k)})`;
       ctx.lineWidth = 2;
       ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawNarration(ctx) {
+    const cue = this.narrationCue;
+    const ids = new Set(cue.targets.flatMap((p) => p.regions || []));
+    ctx.save();
+    this.path(ctx, this.outline);
+    ctx.clip();
+    for (let i = 0; i < REGIONS.length; i++) {
+      if (!ids.has(REGIONS[i].id) || !this.cells[i]?.length) continue;
+      this.path(ctx, this.cells[i]);
+      ctx.fillStyle = 'rgba(233,195,104,0.14)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(239,206,136,0.85)';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.font = `600 13px ${SANS}`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    const labels = [];
+    for (const target of cue.targets) {
+      const point = this.toScreen(project([target.lon, target.lat]));
+      if (point.x < 8 || point.x > this.css.w - 8 || point.y < 12 || point.y > this.css.h - 80) continue;
+      const radius = this.reduced ? 7 : 7 + 2 * Math.sin(cue.elapsed * 1.8);
+      ctx.beginPath(); ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#f0d190'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#f0d190'; ctx.fill();
+      const width = Math.min(this.css.w - 32, ctx.measureText(target.label).width + 22);
+      const clampX = (x) => Math.max(width / 2 + 8, Math.min(this.css.w - width / 2 - 8, x));
+      const candidates = [[point.x, point.y - 27], [point.x + width / 2 + 20, point.y],
+        [point.x - width / 2 - 20, point.y], [point.x, point.y + 29]]
+        .map(([x, y]) => ({ x: clampX(x), y: Math.max(24, Math.min(this.css.h - 70, y)) }));
+      const selected = candidates.find(({ x, y }) => !labels.some((r) =>
+        Math.abs(x - r.x) < (width + r.width) / 2 + 7 && Math.abs(y - r.y) < 32)) || candidates[0];
+      const { x, y } = selected;
+      labels.push({ x, y, width });
+      ctx.beginPath(); ctx.moveTo(point.x, point.y); ctx.lineTo(x, y);
+      ctx.strokeStyle = 'rgba(240,209,144,0.65)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = 'rgba(8,17,18,0.94)'; ctx.fillRect(x - width / 2, y - 13, width, 26);
+      ctx.strokeStyle = '#ad8b43'; ctx.lineWidth = 1; ctx.strokeRect(x - width / 2, y - 13, width, 26);
+      ctx.fillStyle = '#f3dfb6'; ctx.fillText(target.label, x, y, width - 10);
     }
     ctx.restore();
   }
